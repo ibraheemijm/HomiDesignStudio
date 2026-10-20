@@ -123,7 +123,7 @@ private fun HomeScreen(
                         Text("مساحة إبداعك", color = Muted, fontSize = 12.sp)
                         Text("ابدأ تصميمك القادم", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.WandSparkles, null, tint = Cyan, modifier = Modifier.size(30.dp))
+                    Icon(Icons.Default.AutoAwesome, null, tint = Cyan, modifier = Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(14.dp))
                 Button(onClick = onNew, modifier = Modifier.fillMaxWidth().height(52.dp),
