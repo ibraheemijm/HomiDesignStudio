@@ -76,17 +76,17 @@ private fun HomiDesignApp() {
                 }
                 if (editorOpen) {
                     EditorScreen(
-                        titleText, { titleText = it }, subtitleText, { subtitleText = it },
+                        Modifier.weight(1f), titleText, { titleText = it }, subtitleText, { subtitleText = it },
                         accents, selectedColor, { selectedColor = it }, onBack = { editorOpen = false }
                     )
                 } else {
                     when (selectedTab) {
-                        0 -> HomeScreen(selectedCategory, { selectedCategory = it }, accents, selectedColor,
+                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, accents, selectedColor,
                             onNew = { editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى" },
                             onTemplate = { text -> titleText = text; editorOpen = true })
-                        1 -> SimpleState("قوالبي", "ستظهر هنا تصاميمك المحفوظة على الجهاز.", Icons.Default.Dashboard)
-                        2 -> SimpleState("المحفوظات", "احتفظ بتصاميمك المفضلة للوصول إليها بسرعة.", Icons.Default.Bookmark)
-                        else -> SimpleState("الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
+                        1 -> SimpleState(Modifier.weight(1f), "قوالبي", "ستظهر هنا تصاميمك المحفوظة على الجهاز.", Icons.Default.Dashboard)
+                        2 -> SimpleState(Modifier.weight(1f), "المحفوظات", "احتفظ بتصاميمك المفضلة للوصول إليها بسرعة.", Icons.Default.Bookmark)
+                        else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -111,11 +111,11 @@ private fun HomiDesignApp() {
 
 @Composable
 private fun HomeScreen(
-    selectedCategory: String, onCategory: (String) -> Unit, accents: List<Color>, selectedColor: Int,
+    modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit, accents: List<Color>, selectedColor: Int,
     onNew: () -> Unit, onTemplate: (String) -> Unit
 ) {
     val categories = listOf("الكل", "حالات", "اقتباسات", "تهاني", "أعمال")
-    Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         GlassCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,10 +186,10 @@ private fun HomeScreen(
 
 @Composable
 private fun EditorScreen(
-    title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
+    modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit, onBack: () -> Unit
 ) {
-    Column(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
         Box(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(accents[selectedColor], Color(0xFF121729), Color(0xFF080B14))))
@@ -255,8 +255,8 @@ private fun StyledField(value: String, onValue: (String) -> Unit, hint: String) 
 }
 
 @Composable
-private fun SimpleState(title: String, message: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(Modifier.fillMaxWidth().weight(1f).padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+private fun SimpleState(modifier: Modifier = Modifier, title: String, message: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Column(modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Box(Modifier.size(82.dp).clip(RoundedCornerShape(26.dp)).background(Purple.copy(alpha = .16f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Cyan, modifier = Modifier.size(38.dp))
         }
