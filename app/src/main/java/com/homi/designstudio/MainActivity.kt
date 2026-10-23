@@ -465,8 +465,8 @@ private fun EditorScreen(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box {
-                        OutlinedButton(onClick = { fontMenuExpanded = true }, modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = { fontMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
                             Text((builtInFonts.firstOrNull { it.first == elementFonts.getOrElse(selectedElement) { "sans-serif" } }?.second
                                 ?: importedFontPaths.firstOrNull { it == elementFonts.getOrElse(selectedElement) { "sans-serif" } }?.let { File(it.removePrefix("file:")).name }
                                 ?: "خط مستورد").take(22), maxLines = 1)
