@@ -327,7 +327,8 @@ private fun EditorScreen(
             IconButton(onClick = onUndo, enabled = canUndo) { Icon(Icons.Default.Undo, "تراجع", tint = if (canUndo) Cyan else Muted) }
             IconButton(onClick = onRedo, enabled = canRedo) { Icon(Icons.Default.Redo, "إعادة", tint = if (canRedo) Cyan else Muted) }
         }
-        val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
+        val context = LocalContext.current
+    val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
     val photoBitmap = remember(imageUri) { imageUri?.let { raw -> runCatching { context.contentResolver.openInputStream(android.net.Uri.parse(raw))?.use { android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() } }
         val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
         val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
