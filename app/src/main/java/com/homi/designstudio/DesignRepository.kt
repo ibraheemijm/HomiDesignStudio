@@ -50,6 +50,20 @@ object DesignRepository {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
+    fun saveDraft(context: Context, item: DesignItem) {
+        val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts))
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
+    }
+
+    fun draft(context: Context): DesignItem? = try {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("draft", null) ?: return null
+        val o = JSONObject(raw)
+        val extras = o.optJSONArray("extraTexts")
+        DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) })
+    } catch (_: Exception) { null }
+
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
         all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
