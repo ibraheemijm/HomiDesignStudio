@@ -30,7 +30,10 @@ data class DesignItem(
     val elementSizes: List<Float> = emptyList(),
     val elementColors: List<Int> = emptyList(),
     val elementOrder: List<Int> = emptyList(),
-    val imageUri: String? = null
+    val imageUri: String? = null,
+    val imageX: Float = .5f,
+    val imageY: Float = .17f,
+    val imageSize: Float = .19f
 )
 
 private fun Int?.orZero(): Int = this ?: 0
@@ -48,7 +51,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() })
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() }, o.optDouble("imageX", .5).toFloat(), o.optDouble("imageY", .17).toFloat(), o.optDouble("imageSize", .19).toFloat())
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -56,13 +59,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "")) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun saveDraft(context: Context, item: DesignItem) {
         val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
-            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder)).put("imageUri", item.imageUri ?: "")
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder)).put("imageUri", item.imageUri ?: "").put("imageX", item.imageX).put("imageY", item.imageY).put("imageSize", item.imageSize)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
     }
 
@@ -76,7 +79,7 @@ object DesignRepository {
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "")) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
@@ -99,12 +102,13 @@ object DesignExporter {
             try {
                 val photo = decodePhoto(context, android.net.Uri.parse(uriString))
                 if (photo != null) {
-                    val side = 210f
-                    val top = 150f
+                    val side = (item.imageSize.coerceIn(.08f, .45f) * w)
+                    val left = (item.imageX.coerceIn(.08f, .92f) * w) - side / 2f
+                    val top = (item.imageY.coerceIn(.08f, .85f) * h) - side / 2f
                     val save = c.save()
-                    val path = android.graphics.Path().apply { addCircle(w / 2f, top + side / 2f, side / 2f, android.graphics.Path.Direction.CW) }
+                    val path = android.graphics.Path().apply { addCircle(left + side / 2f, top + side / 2f, side / 2f, android.graphics.Path.Direction.CW) }
                     c.clipPath(path)
-                    c.drawBitmap(photo, null, android.graphics.RectF((w - side) / 2f, top, (w + side) / 2f, top + side), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                    c.drawBitmap(photo, null, android.graphics.RectF(left, top, left + side, top + side), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
                     c.restoreToCount(save)
                     photo.recycle()
                 }
