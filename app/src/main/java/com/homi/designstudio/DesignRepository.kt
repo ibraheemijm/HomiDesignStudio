@@ -74,7 +74,7 @@ object DesignRepository {
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
@@ -98,20 +98,19 @@ object DesignExporter {
         p.style = Paint.Style.FILL
         p.color = AColor.WHITE
         p.textAlign = Paint.Align.CENTER
-        p.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        p.textSize = 66f
-        drawLines(c, item.title.ifBlank { "عنوان تصميمك" }, p, 540f, 530f, 850f, 84f)
-        p.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        p.textSize = 40f
-        p.color = 0xE6FFFFFF.toInt()
-        drawLines(c, item.subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, p, 540f, 720f, 850f, 56f)
-        p.textSize = 32f
-        p.color = 0xE6FFFFFF.toInt()
-        p.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        val extras = item.extraTexts.take(4)
-        extras.forEachIndexed { index, value ->
-            p.textSize = 32f
-            drawLines(c, value.ifBlank { "عنصر نصي ${index + 1}" }, p, 540f, 830f + index * 72f, 850f, 40f)
+        val texts = listOf(item.title.ifBlank { "عنوان تصميمك" }, item.subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }) + item.extraTexts.take(4)
+        val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
+        val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
+        val order = (item.elementOrder + texts.indices.filterNot { it in item.elementOrder }).filter { it in texts.indices }
+        order.forEach { index ->
+            p.textAlign = Paint.Align.CENTER
+            p.color = item.elementColors.getOrNull(index)?.let { intArrayOf(0xFFFFFFFF.toInt(), 0xFF53E0D0.toInt(), 0xFFFFD166.toInt(), 0xFFFF8FAB.toInt())[it.coerceIn(0, 3)] } ?: 0xE6FFFFFF.toInt()
+            p.typeface = Typeface.create(if (index == 0) "sans-serif" else "sans-serif-medium", if (index == 0) Typeface.BOLD else Typeface.NORMAL)
+            val sizeSp = item.elementSizes.getOrNull(index) ?: defaultSizes[index.coerceAtMost(defaultSizes.lastIndex)]
+            p.textSize = sizeSp * 2.35f
+            val x = (item.elementXs.getOrNull(index) ?: .5f).coerceIn(.08f, .92f) * w
+            val y = (item.elementYs.getOrNull(index) ?: defaultYs[index.coerceAtMost(defaultYs.lastIndex)]) * h
+            drawLines(c, texts[index], p, x, y, 850f, p.textSize * 1.22f)
         }
         p.textSize = 24f
         p.color = 0xBFFFFFFF.toInt()
