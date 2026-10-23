@@ -2,7 +2,7 @@ name: Android APK Build
 
 on:
   push:
-    branches: [ "main", "feature/multilayer-editor", "feature/visual-editor-tools" ]
+    branches: [ "main", "feature/multilayer-editor", "feature/visual-editor-tools", "feature/image-layer" ]
   workflow_dispatch:
 
 permissions:
