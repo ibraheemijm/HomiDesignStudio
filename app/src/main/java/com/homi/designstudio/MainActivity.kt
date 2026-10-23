@@ -357,9 +357,7 @@ private fun EditorScreen(
             .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp))) {
             val canvasWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
             val canvasHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-            Row(Modifier.align(Alignment.TopCenter).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                repeat(3) { Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .72f), modifier = Modifier.size(18.dp)) }
-            }
+            Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .72f), modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(18.dp))
             shapes.forEachIndexed { shapeIndex, shape ->
                 val shapeDp = (maxWidth * shape.size).coerceIn(18.dp, 120.dp)
                 val shapeColor = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))[shape.color.coerceIn(0, 3)]
