@@ -85,12 +85,12 @@ object DesignRepository {
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
-            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() })
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() }, o.optDouble("imageX", .5).toFloat(), o.optDouble("imageY", .17).toFloat(), o.optDouble("imageSize", .19).toFloat(), readShapes(o))
     } catch (_: Exception) { null }
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize).put("shapes", JSONArray(it.shapes.map { sh -> JSONObject().put("type", sh.type).put("x", sh.x).put("y", sh.y).put("size", sh.size).put("color", sh.color) }))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
