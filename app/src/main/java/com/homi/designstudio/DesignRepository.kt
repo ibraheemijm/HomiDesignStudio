@@ -22,8 +22,11 @@ data class DesignItem(
     val title: String,
     val subtitle: String,
     val colorIndex: Int,
-    val savedAt: Long = System.currentTimeMillis()
+    val savedAt: Long = System.currentTimeMillis(),
+    val extraTexts: List<String> = emptyList()
 )
+
+private fun Int?.orZero(): Int = this ?: 0
 
 object DesignRepository {
     private const val PREFS = "homi_designs"
@@ -35,7 +38,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"))
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) })
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -43,13 +46,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt)) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt)) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
@@ -80,6 +83,14 @@ object DesignExporter {
         p.textSize = 40f
         p.color = 0xE6FFFFFF.toInt()
         drawLines(c, item.subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, p, 540f, 720f, 850f, 56f)
+        p.textSize = 32f
+        p.color = 0xE6FFFFFF.toInt()
+        p.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        val extras = item.extraTexts.take(4)
+        extras.forEachIndexed { index, value ->
+            p.textSize = 32f
+            drawLines(c, value.ifBlank { "عنصر نصي ${index + 1}" }, p, 540f, 830f + index * 72f, 850f, 40f)
+        }
         p.textSize = 24f
         p.color = 0xBFFFFFFF.toInt()
         c.drawText("HOMI DESIGN", 540f, 1200f, p)
