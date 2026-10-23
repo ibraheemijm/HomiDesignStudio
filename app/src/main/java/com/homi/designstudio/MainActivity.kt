@@ -131,9 +131,12 @@ private fun HomiDesignApp() {
                         Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
                         accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
                         elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder,
-                        imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize,
-                        onMoveImage = { dx, dy -> recordEdit(); imageX = (imageX + dx).coerceIn(.08f, .92f); imageY = (imageY + dy).coerceIn(.08f, .85f) },
-                        onImageSize = { recordEdit(); imageSize = it }, onPickImage = { imagePicker.launch(arrayOf("image/*")) }, onRemoveImage = { recordEdit(); imageUri = null },
+                        shapes = shapes, selectedShape = selectedShape,
+                         onAddShape = { type -> recordEdit(); shapes = shapes + ShapeLayer(type, .5f, .5f, .12f, 1); selectedShape = shapes.size },
+                         onMoveShape = { i, dx, dy -> selectedShape = i; shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(x = (it[i].x + dx).coerceIn(.015f, .985f), y = (it[i].y + dy).coerceIn(.015f, .985f)) } },
+                         onShapeSize = { i, size -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(size = size) } },
+                         onShapeColor = { i, color -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(color = color) } },
+                         onRemoveShape = { i -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it.removeAt(i) }; selectedShape = -1 },
                         selectedElement = selectedElement, onSelectElement = { selectedElement = it },
                         onMoveElement = { i, dx, dy -> elementXs = elementXs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dx).coerceIn(.015f, .985f) }; elementYs = elementYs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dy).coerceIn(.015f, .985f) } },
                         onSizeElement = { i, size -> recordEdit(); elementSizes = elementSizes.toMutableList().also { while (it.size <= i) it.add(13f); it[i] = size } },
@@ -155,7 +158,7 @@ private fun HomiDesignApp() {
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
@@ -163,7 +166,7 @@ private fun HomiDesignApp() {
                     when (selectedTab) {
                         0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
                             onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
-                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts; imageUri = draft.imageUri; imageX = draft.imageX; imageY = draft.imageY; imageSize = draft.imageSize; shapes = draft.shapes
+                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts; imageUri = draft.imageUri; imageX = draft.imageX; imageY = draft.imageY; imageSize = draft.imageSize; shapes = draft.shapes; shapes = draft.shapes
                                 selectedColor = draft.colorIndex.coerceIn(0, 3); elementXs = draft.elementXs.ifEmpty { elementXs }; elementYs = draft.elementYs.ifEmpty { elementYs }; elementSizes = draft.elementSizes.ifEmpty { elementSizes }; elementColors = draft.elementColors.ifEmpty { elementColors }; elementOrder = draft.elementOrder.ifEmpty { elementOrder }; editingId = null; editorOpen = true
                                 undoStack.clear(); redoStack.clear()
                             } },
@@ -173,7 +176,7 @@ private fun HomiDesignApp() {
                             onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; selectedElement = 0; editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
@@ -333,9 +336,19 @@ private fun EditorScreen(
             .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp))) {
             val canvasWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
             val canvasHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-            Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .45f), modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(24.dp))
-            val photoSize = (maxWidth * imageSize).coerceIn(48.dp, 150.dp)
-            photoBitmap?.let { photo -> Image(bitmap = photo, contentDescription = "صورة التصميم", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.offset { IntOffset((imageX * canvasWidth - photoSize.toPx() / 2f).roundToInt(), (imageY * canvasHeight - photoSize.toPx() / 2f).roundToInt()) }.size(photoSize).clip(CircleShape).border(2.dp, Color.White.copy(alpha = .8f), CircleShape).pointerInput(imageX, imageY, photoSize) { detectDragGestures { change, dragAmount -> change.consume(); onMoveImage(dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } }) }
+            Row(Modifier.align(Alignment.TopCenter).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                repeat(3) { Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .72f), modifier = Modifier.size(18.dp)) }
+            }
+            shapes.forEachIndexed { shapeIndex, shape ->
+                val shapeDp = (maxWidth * shape.size).coerceIn(18.dp, 120.dp)
+                val shapeColor = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))[shape.color.coerceIn(0, 3)]
+                Box(Modifier.offset { IntOffset((shape.x * canvasWidth - shapeDp.roundToPx() / 2f).roundToInt(), (shape.y * canvasHeight - shapeDp.roundToPx() / 2f).roundToInt()) }
+                    .size(if (shape.type == "line") shapeDp * 1.6f else shapeDp, if (shape.type == "line") 3.dp else shapeDp)
+                    .then(if (shape.type == "circle") Modifier.clip(CircleShape) else Modifier.clip(RoundedCornerShape(5.dp)))
+                    .background(if (shape.type == "line") shapeColor else shapeColor.copy(alpha = .18f))
+                    .border(if (selectedShape == shapeIndex) 2.dp else 1.dp, if (selectedShape == shapeIndex) Cyan else shapeColor, if (shape.type == "circle") CircleShape else RoundedCornerShape(5.dp))
+                    .pointerInput(shapeIndex, shapes) { detectDragGestures { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
+            }
             visibleOrder.forEach { index ->
                 val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
                 val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
