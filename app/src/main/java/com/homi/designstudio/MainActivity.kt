@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
 private fun HomiDesignApp() {
     var selectedTab by remember { mutableStateOf(0) }
     var selectedCategory by remember { mutableStateOf("الكل") }
+    var templateQuery by remember { mutableStateOf("") }
     var titleText by remember { mutableStateOf("اصنع شيئًا مميزًا") }
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
     var extraTexts by remember { mutableStateOf(listOf<String>()) }
@@ -123,7 +124,7 @@ private fun HomiDesignApp() {
                     )
                 } else {
                     when (selectedTab) {
-                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, accents, selectedColor,
+                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor,
                             onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0 },
                             onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
@@ -156,7 +157,8 @@ private fun HomiDesignApp() {
 
 @Composable
 private fun HomeScreen(
-    modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit, accents: List<Color>, selectedColor: Int,
+    modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit,
+    templateQuery: String, onTemplateQuery: (String) -> Unit, accents: List<Color>, selectedColor: Int,
     onNew: () -> Unit, onTemplate: (String) -> Unit
 ) {
     val categories = listOf("الكل", "حالات", "اقتباسات", "تهاني", "أعمال")
@@ -180,6 +182,19 @@ private fun HomeScreen(
             }
         }
         Spacer(Modifier.height(22.dp))
+        OutlinedTextField(
+            value = templateQuery, onValueChange = onTemplateQuery,
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            placeholder = { Text("ابحث عن قالب...", color = Muted) },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = Cyan) },
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Purple, unfocusedBorderColor = Color(0xFF30374C),
+                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                cursorColor = Cyan, focusedContainerColor = SurfaceGlass, unfocusedContainerColor = SurfaceGlass
+            )
+        )
+        Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("قوالب مختارة", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
             Text("اكتشف المزيد", fontSize = 12.sp, color = Cyan)
@@ -205,7 +220,8 @@ private fun HomeScreen(
             DesignTemplate("مساء الورد", "راحة وطمأنينة لقلبك", accents[2], "حالات"),
             DesignTemplate("ألف مبروك", "فرحتكم تكمل فرحتنا", accents[1], "تهاني"),
             DesignTemplate("فكرة تصنع فرقًا", "ابتكر شيئًا يستحق المشاركة", accents[3], "أعمال")
-        ).filter { selectedCategory == "الكل" || it.category == selectedCategory }
+        ).filter { (selectedCategory == "الكل" || it.category == selectedCategory) &&
+            (templateQuery.isBlank() || it.title.contains(templateQuery.trim(), ignoreCase = true) || it.subtitle.contains(templateQuery.trim(), ignoreCase = true)) }
         if (templates.isEmpty()) {
             Text("لا توجد قوالب في هذا التصنيف حاليًا.", color = Muted, modifier = Modifier.padding(vertical = 20.dp))
         }
