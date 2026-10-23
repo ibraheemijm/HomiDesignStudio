@@ -352,8 +352,8 @@ private fun EditorScreen(
             visibleOrder.forEach { index ->
                 val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
                 val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
-                Text(value, modifier = Modifier.fillMaxWidth(.8f)
-                    .offset { IntOffset(((elementXs.getOrElse(index) { .5f } * canvasWidth) - canvasWidth * .4f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] } * canvasHeight).roundToInt()) }
+                Text(value, modifier = Modifier.fillMaxWidth(.96f)
+                     .offset { IntOffset(((elementXs.getOrElse(index) { .5f }.coerceIn(.01f, .99f) * canvasWidth) - canvasWidth * .48f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] }.coerceIn(.02f, .98f) * canvasHeight - 36f).roundToInt()) }
                     .pointerInput(index, elementXs, elementYs) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
