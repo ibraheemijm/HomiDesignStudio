@@ -3,6 +3,7 @@ package com.homi.designstudio
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
@@ -28,7 +29,11 @@ data class DesignItem(
     val elementYs: List<Float> = emptyList(),
     val elementSizes: List<Float> = emptyList(),
     val elementColors: List<Int> = emptyList(),
-    val elementOrder: List<Int> = emptyList()
+    val elementOrder: List<Int> = emptyList(),
+    val imageUri: String? = null,
+    val imageX: Float = .5f,
+    val imageY: Float = .17f,
+    val imageSize: Float = .19f
 )
 
 private fun Int?.orZero(): Int = this ?: 0
@@ -46,7 +51,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() }, o.optDouble("imageX", .5).toFloat(), o.optDouble("imageY", .17).toFloat(), o.optDouble("imageSize", .19).toFloat())
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -54,13 +59,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun saveDraft(context: Context, item: DesignItem) {
         val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
-            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder))
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder)).put("imageUri", item.imageUri ?: "").put("imageX", item.imageX).put("imageY", item.imageY).put("imageSize", item.imageSize)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
     }
 
@@ -69,12 +74,12 @@ object DesignRepository {
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
-            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() })
     } catch (_: Exception) { null }
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
@@ -82,7 +87,9 @@ object DesignRepository {
 object DesignExporter {
     private val palette = intArrayOf(0xFF7657FF.toInt(), 0xFF087E8B.toInt(), 0xFFB54772.toInt(), 0xFFCA8A04.toInt())
 
-    fun render(item: DesignItem): Bitmap {
+    private fun decodePhoto(context: Context, uri: android.net.Uri): Bitmap? = try { context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } } catch (_: Exception) { null }
+
+    fun render(context: Context, item: DesignItem): Bitmap {
         val w = 1080
         val h = 1350
         val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -91,6 +98,22 @@ object DesignExporter {
         p.shader = android.graphics.LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), palette[item.colorIndex.coerceIn(0, 3)], 0xFF0C1020.toInt(), android.graphics.Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
         p.shader = null
+        item.imageUri?.let { uriString ->
+            try {
+                val photo = decodePhoto(context, android.net.Uri.parse(uriString))
+                if (photo != null) {
+                    val side = (item.imageSize.coerceIn(.08f, .45f) * w)
+                    val left = (item.imageX.coerceIn(.08f, .92f) * w) - side / 2f
+                    val top = (item.imageY.coerceIn(.08f, .85f) * h) - side / 2f
+                    val save = c.save()
+                    val path = android.graphics.Path().apply { addCircle(left + side / 2f, top + side / 2f, side / 2f, android.graphics.Path.Direction.CW) }
+                    c.clipPath(path)
+                    c.drawBitmap(photo, null, android.graphics.RectF(left, top, left + side, top + side), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                    c.restoreToCount(save)
+                    photo.recycle()
+                }
+            } catch (_: Exception) { }
+        }
         p.style = Paint.Style.STROKE
         p.strokeWidth = 3f
         p.color = 0x55FFFFFF
@@ -132,7 +155,7 @@ object DesignExporter {
 
     fun exportPng(context: Context, item: DesignItem): String {
         val name = "HomiDesign_${item.id}.png"
-        val bitmap = render(item)
+        val bitmap = render(context, item)
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, name)
@@ -151,7 +174,7 @@ object DesignExporter {
 
     fun exportPdf(context: Context, item: DesignItem): String {
         val name = "HomiDesign_${item.id}.pdf"
-        val bitmap = render(item)
+        val bitmap = render(context, item)
         val doc = PdfDocument()
         val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
         // Keep the 4:5 artwork proportional and centered on an A4-sized page.
