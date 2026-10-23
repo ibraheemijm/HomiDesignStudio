@@ -23,10 +23,18 @@ data class DesignItem(
     val subtitle: String,
     val colorIndex: Int,
     val savedAt: Long = System.currentTimeMillis(),
-    val extraTexts: List<String> = emptyList()
+    val extraTexts: List<String> = emptyList(),
+    val elementXs: List<Float> = emptyList(),
+    val elementYs: List<Float> = emptyList(),
+    val elementSizes: List<Float> = emptyList(),
+    val elementColors: List<Int> = emptyList(),
+    val elementOrder: List<Int> = emptyList()
 )
 
 private fun Int?.orZero(): Int = this ?: 0
+
+private fun readFloats(o: JSONObject, key: String): List<Float> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optDouble(it)?.toFloat() }
+private fun readInts(o: JSONObject, key: String): List<Int> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optInt(it) }
 
 object DesignRepository {
     private const val PREFS = "homi_designs"
@@ -38,7 +46,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) })
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -46,13 +54,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun saveDraft(context: Context, item: DesignItem) {
         val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
-            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts))
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
     }
 
@@ -61,7 +69,7 @@ object DesignRepository {
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
-            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) })
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
     } catch (_: Exception) { null }
 
     fun delete(context: Context, id: Long) {
