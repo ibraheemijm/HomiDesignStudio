@@ -71,7 +71,7 @@ object DesignRepository {
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
-            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() })
     } catch (_: Exception) { null }
 
     fun delete(context: Context, id: Long) {
