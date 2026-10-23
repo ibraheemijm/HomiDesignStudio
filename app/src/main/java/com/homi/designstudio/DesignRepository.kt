@@ -33,13 +33,24 @@ data class DesignItem(
     val imageUri: String? = null,
     val imageX: Float = .5f,
     val imageY: Float = .17f,
-    val imageSize: Float = .19f
+    val imageSize: Float = .19f,
+    val shapes: List<ShapeLayer> = emptyList()
 )
+
+data class ShapeLayer(val type: String, val x: Float, val y: Float, val size: Float, val color: Int = 1)
 
 private fun Int?.orZero(): Int = this ?: 0
 
 private fun readFloats(o: JSONObject, key: String): List<Float> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optDouble(it)?.toFloat() }
 private fun readInts(o: JSONObject, key: String): List<Int> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optInt(it) }
+
+private fun readShapes(o: JSONObject): List<ShapeLayer> {
+    val a = o.optJSONArray("shapes") ?: return emptyList()
+    return (0 until a.length()).mapNotNull { i -> runCatching {
+        val v = a.getJSONObject(i)
+        ShapeLayer(v.optString("type", "circle"), v.optDouble("x", .5).toFloat(), v.optDouble("y", .5).toFloat(), v.optDouble("size", .12).toFloat(), v.optInt("color", 1))
+    }.getOrNull() }
+}
 
 object DesignRepository {
     private const val PREFS = "homi_designs"
@@ -51,7 +62,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() }, o.optDouble("imageX", .5).toFloat(), o.optDouble("imageY", .17).toFloat(), o.optDouble("imageSize", .19).toFloat())
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"), o.optString("imageUri").takeIf { it.isNotBlank() }, o.optDouble("imageX", .5).toFloat(), o.optDouble("imageY", .17).toFloat(), o.optDouble("imageSize", .19).toFloat(), readShapes(o))
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -59,13 +70,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize)) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder)).put("imageUri", it.imageUri ?: "").put("imageX", it.imageX).put("imageY", it.imageY).put("imageSize", it.imageSize).put("shapes", JSONArray(it.shapes.map { sh -> JSONObject().put("type", sh.type).put("x", sh.x).put("y", sh.y).put("size", sh.size).put("color", sh.color) }))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun saveDraft(context: Context, item: DesignItem) {
         val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
-            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder)).put("imageUri", item.imageUri ?: "").put("imageX", item.imageX).put("imageY", item.imageY).put("imageSize", item.imageSize)
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder)).put("imageUri", item.imageUri ?: "").put("imageX", item.imageX).put("imageY", item.imageY).put("imageSize", item.imageSize).put("shapes", JSONArray(item.shapes.map { sh -> JSONObject().put("type", sh.type).put("x", sh.x).put("y", sh.y).put("size", sh.size).put("color", sh.color) }))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
     }
 
@@ -98,6 +109,25 @@ object DesignExporter {
         p.shader = android.graphics.LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), palette[item.colorIndex.coerceIn(0, 3)], 0xFF0C1020.toInt(), android.graphics.Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
         p.shader = null
+        p.color = 0xDFFFFFFF.toInt()
+        p.textAlign = Paint.Align.CENTER
+        p.typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        p.textSize = 54f
+        c.drawText("✦   ✦   ✦", 540f, 135f, p)
+        item.shapes.forEach { shape ->
+            val cx = shape.x.coerceIn(.02f, .98f) * w
+            val cy = shape.y.coerceIn(.02f, .98f) * h
+            val side = shape.size.coerceIn(.025f, .4f) * w
+            p.color = intArrayOf(0xFFFFFFFF.toInt(), 0xFF53E0D0.toInt(), 0xFFFFD166.toInt(), 0xFFFF8FAB.toInt())[shape.color.coerceIn(0, 3)]
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = 8f
+            when (shape.type) {
+                "line" -> c.drawLine(cx - side, cy, cx + side, cy, p)
+                "rect" -> c.drawRoundRect(cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2, 14f, 14f, p)
+                else -> c.drawCircle(cx, cy, side / 2, p)
+            }
+            p.style = Paint.Style.FILL
+        }
         item.imageUri?.let { uriString ->
             try {
                 val photo = decodePhoto(context, android.net.Uri.parse(uriString))
