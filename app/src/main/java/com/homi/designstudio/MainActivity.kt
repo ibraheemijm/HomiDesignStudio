@@ -200,13 +200,13 @@ private fun HomeScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.height(10.dp))
-                                Text(item.first, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                                Text(item.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(5.dp))
                                 Text(item.subtitle, color = Color.White.copy(alpha = .8f), fontSize = 11.sp, textAlign = TextAlign.Center)
                             }
                         }
                         Spacer(Modifier.height(7.dp))
-                        Text(item.first, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("قالب قابل للتعديل", color = Muted, fontSize = 11.sp)
                     }
                 }
