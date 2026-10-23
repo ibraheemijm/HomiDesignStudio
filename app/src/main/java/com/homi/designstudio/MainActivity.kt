@@ -89,7 +89,6 @@ private fun HomiDesignApp() {
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
                 }
-                Spacer(Modifier.weight(1f))
                 NavigationBar(containerColor = Color(0xE6101422), tonalElevation = 0.dp) {
                     val items = listOf("الرئيسية", "قوالبي", "المحفوظات", "الإعدادات")
                     val icons = listOf(Icons.Default.Home, Icons.Default.Dashboard, Icons.Default.BookmarkBorder, Icons.Default.Settings)
