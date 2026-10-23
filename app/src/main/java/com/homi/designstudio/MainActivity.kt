@@ -1,6 +1,9 @@
 package com.homi.designstudio
 
 import android.os.Bundle
+import android.content.Intent
+import android.graphics.Typeface
+import java.io.File
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,6 +35,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -43,8 +47,27 @@ private val Purple = Color(0xFF9B7BFF)
 private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
+private fun fontFamilyFromId(id: String): FontFamily = try {
+    if (id.startsWith("file:")) FontFamily(Typeface.createFromFile(File(id.removePrefix("file:"))))
+    else when (id) {
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
+        "cursive" -> FontFamily.Cursive
+        "sans-serif-light" -> FontFamily.SansSerif
+        else -> FontFamily.SansSerif
+    }
+} catch (_: Exception) { FontFamily.SansSerif }
+
+private val builtInFonts = listOf(
+    "sans-serif" to "Sans Serif",
+    "serif" to "Serif",
+    "monospace" to "Monospace",
+    "cursive" to "Casual",
+    "sans-serif-light" to "Sans Serif Light"
+)
+
 private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
-private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float, val shapes: List<ShapeLayer>)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val fonts: List<String>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float, val shapes: List<ShapeLayer>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,12 +94,13 @@ private fun HomiDesignApp() {
     var elementSizes by remember { mutableStateOf(listOf(28f, 15f, 13f, 13f, 13f, 13f)) }
     var elementColors by remember { mutableStateOf(listOf(0, 0, 0, 0, 0, 0)) }
     var elementOrder by remember { mutableStateOf(listOf(0, 1, 2, 3, 4, 5)) }
+    var elementFonts by remember { mutableStateOf(List(6) { "sans-serif" }) }
     var selectedElement by remember { mutableIntStateOf(0) }
     var shapes by remember { mutableStateOf(listOf<ShapeLayer>()) }
     var selectedShape by remember { mutableIntStateOf(-1) }
     val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
-    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, null, imageX, imageY, imageSize, shapes) }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, elementFonts, null, imageX, imageY, imageSize, shapes) }
     val recordEdit = {
         undoStack.add(currentSnapshot())
         if (undoStack.size > 50) undoStack.removeAt(0)
@@ -87,16 +111,16 @@ private fun HomiDesignApp() {
         subtitleText = snapshot.subtitle
         selectedColor = snapshot.colorIndex
         extraTexts = snapshot.extraTexts
-        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize; shapes = snapshot.shapes
+        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; elementFonts = snapshot.fonts; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize; shapes = snapshot.shapes
     }
     val context = LocalContext.current
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
     var hasDraft by remember { mutableStateOf(DesignRepository.draft(context) != null) }
-    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, imageUri, editingId) {
+    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, elementFonts, imageUri, editingId) {
         if (editorOpen) {
-            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes))
+            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, elementFonts = elementFonts, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes))
             hasDraft = true
         }
     }
@@ -130,7 +154,8 @@ private fun HomiDesignApp() {
                     EditorScreen(
                         Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
                         accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
-                        elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder,
+                        elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, elementFonts = elementFonts,
+                        onFontElement = { i, font -> elementFonts = elementFonts.toMutableList().also { while (it.size <= i) it.add("sans-serif"); it[i] = font } },
                         shapes = shapes, selectedShape = selectedShape,
                          onAddShape = { type -> recordEdit(); shapes = shapes + ShapeLayer(type, .5f, .5f, .12f, 1); selectedShape = shapes.size },
                          onMoveShape = { i, dx, dy -> selectedShape = i; shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(x = (it[i].x + dx).coerceIn(.015f, .985f), y = (it[i].y + dy).coerceIn(.015f, .985f)) } },
@@ -148,17 +173,17 @@ private fun HomiDesignApp() {
                         onBack = { editorOpen = false },
                         onSave = {
                             val id = editingId ?: System.currentTimeMillis()
-                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)
+                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, elementFonts = elementFonts, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)
                             DesignRepository.save(context, item)
                             savedDesigns.removeAll { it.id == id }; savedDesigns.add(0, item); editingId = id
                             Toast.makeText(context, "تم حفظ التصميم على الجهاز", Toast.LENGTH_SHORT).show()
                         },
                         onExportPng = {
-                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, elementFonts = elementFonts, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, elementFonts = elementFonts, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
@@ -171,12 +196,12 @@ private fun HomiDesignApp() {
                                 undoStack.clear(); redoStack.clear()
                             } },
                             onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); imageUri = null; imageX = .5f; imageY = .17f; imageSize = .19f; shapes = emptyList(); selectedShape = -1; selectedElement = 0; undoStack.clear(); redoStack.clear() },
-                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); imageUri = null; shapes = emptyList(); selectedShape = -1; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); selectedElement = 0; editorOpen = true })
+                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); imageUri = null; shapes = emptyList(); selectedShape = -1; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); elementFonts = List(6) { "sans-serif" }; selectedElement = 0; editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = null; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; elementFonts = item.elementFonts.ifEmpty { elementFonts }; imageUri = null; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; elementFonts = item.elementFonts.ifEmpty { elementFonts }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
@@ -309,7 +334,7 @@ private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
     extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
-    elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>,
+    elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>, elementFonts: List<String>, onFontElement: (Int, String) -> Unit,
     shapes: List<ShapeLayer>, selectedShape: Int, onAddShape: (String) -> Unit, onMoveShape: (Int, Float, Float) -> Unit,
     onShapeSize: (Int, Float) -> Unit, onShapeColor: (Int, Int) -> Unit, onRemoveShape: (Int) -> Unit,
     selectedElement: Int, onSelectElement: (Int) -> Unit, onMoveElement: (Int, Float, Float) -> Unit,
@@ -367,6 +392,7 @@ private fun EditorScreen(
                     .clickable { onSelectElement(index) }.padding(horizontal = 4.dp, vertical = 3.dp),
                     color = palette[elementColors.getOrElse(index) { 0 }.coerceIn(0, palette.lastIndex)],
                     fontSize = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] }).sp,
+                    fontFamily = fontFamilyFromId(elementFonts.getOrElse(index) { "sans-serif" }),
                     fontWeight = if (index == 0) FontWeight.ExtraBold else FontWeight.Medium,
                     textAlign = TextAlign.Center, lineHeight = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] } * 1.2f).sp
                 )
@@ -386,6 +412,66 @@ private fun EditorScreen(
                         onValueChange = { onSizeElement(selectedElement, it) }, valueRange = 10f..48f,
                         modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Purple))
                 }
+                Text("نوع الخط", color = Muted, fontSize = 12.sp)
+                var fontMenuExpanded by remember { mutableStateOf(false) }
+                val contextForFonts = LocalContext.current
+                val fontsDirectory = remember { File(contextForFonts.filesDir, "fonts").apply { mkdirs() } }
+                val importedFontPaths = remember { mutableStateListOf<String>().apply {
+                    addAll(fontsDirectory.listFiles()?.filter { it.isFile && it.extension.lowercase() in listOf("ttf", "otf") }?.map { "file:" + it.absolutePath } ?: emptyList())
+                } }
+                val importFontLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) {
+                        try {
+                            val name = (uri.lastPathSegment ?: "ImportedFont.ttf").substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+                            val ext = name.substringAfterLast('.', "").lowercase()
+                            if (ext !in listOf("ttf", "otf")) {
+                                Toast.makeText(contextForFonts, "اختر ملف خط بصيغة TTF أو OTF", Toast.LENGTH_LONG).show()
+                            } else {
+                                val target = File(fontsDirectory, name).let { if (it.exists()) File(fontsDirectory, System.currentTimeMillis().toString() + "_" + name) else it }
+                                contextForFonts.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
+                                    ?: error("تعذر قراءة ملف الخط")
+                                val fontId = "file:" + target.absolutePath
+                                if (fontId !in importedFontPaths) importedFontPaths.add(fontId)
+                                onFontElement(selectedElement, fontId)
+                                Toast.makeText(contextForFonts, "تم استيراد الخط وتطبيقه", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(contextForFonts, "تعذر استيراد الخط: " + (e.message ?: ""), Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box {
+                        OutlinedButton(onClick = { fontMenuExpanded = true }, modifier = Modifier.weight(1f)) {
+                            Text((builtInFonts.firstOrNull { it.first == elementFonts.getOrElse(selectedElement) { "sans-serif" } }?.second
+                                ?: importedFontPaths.firstOrNull { it == elementFonts.getOrElse(selectedElement) { "sans-serif" } }?.let { File(it.removePrefix("file:")).name }
+                                ?: "خط مستورد").take(22), maxLines = 1)
+                            Icon(Icons.Default.ArrowDropDown, null)
+                        }
+                        DropdownMenu(expanded = fontMenuExpanded, onDismissRequest = { fontMenuExpanded = false }) {
+                            builtInFonts.forEach { (id, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { onFontElement(selectedElement, id); fontMenuExpanded = false })
+                            }
+                            if (importedFontPaths.isNotEmpty()) {
+                                HorizontalDivider()
+                                importedFontPaths.forEach { id ->
+                                    DropdownMenuItem(text = { Text(File(id.removePrefix("file:")).name) }, onClick = { onFontElement(selectedElement, id); fontMenuExpanded = false })
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { importFontLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.FileOpen, null); Spacer(Modifier.width(5.dp)); Text("استيراد خط")
+                    }
+                    OutlinedButton(onClick = {
+                        contextForFonts.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://fonts.google.com/")))
+                    }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Language, null); Spacer(Modifier.width(5.dp)); Text("Google Fonts")
+                    }
+                }
+                Text("نزّل ملف TTF أو OTF من Google Fonts ثم اضغط «استيراد خط» واختر الملف من التنزيلات.", color = Muted, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("اللون", color = Muted, fontSize = 12.sp)
                     listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { index, color ->
