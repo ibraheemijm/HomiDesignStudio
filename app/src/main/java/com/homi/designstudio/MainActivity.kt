@@ -347,7 +347,7 @@ private fun EditorScreen(
                     .then(if (shape.type == "circle") Modifier.clip(CircleShape) else Modifier.clip(RoundedCornerShape(5.dp)))
                     .background(if (shape.type == "line") shapeColor else shapeColor.copy(alpha = .18f))
                     .border(if (selectedShape == shapeIndex) 2.dp else 1.dp, if (selectedShape == shapeIndex) Cyan else shapeColor, if (shape.type == "circle") CircleShape else RoundedCornerShape(5.dp))
-                    .pointerInput(shapeIndex) { detectDragGestures { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
+                    .pointerInput(shapeIndex) { detectDragGestures(onDragStart = { onMoveShape(shapeIndex, 0f, 0f) }) { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
             }
             visibleOrder.forEach { index ->
                 val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
