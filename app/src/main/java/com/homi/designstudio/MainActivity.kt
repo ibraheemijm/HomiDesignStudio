@@ -142,7 +142,7 @@ private fun HomiDesignApp() {
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
@@ -299,6 +299,7 @@ private fun EditorScreen(
     canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
     onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
+    LaunchedEffect(extraTexts.size) { if (selectedElement >= 2 + extraTexts.size) onSelectElement((1 + extraTexts.size).coerceAtLeast(0)) }
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
