@@ -57,7 +57,7 @@ object DesignRepository {
     }
 
     fun draft(context: Context): DesignItem? = try {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("draft", null) ?: return null
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("draft", null) ?: throw IllegalStateException("No saved draft")
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
