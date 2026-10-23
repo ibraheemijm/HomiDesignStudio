@@ -1,6 +1,7 @@
 package com.homi.designstudio
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -48,6 +50,9 @@ private fun HomiDesignApp() {
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
     var selectedColor by remember { mutableIntStateOf(0) }
     var editorOpen by remember { mutableStateOf(false) }
+    var editingId by remember { mutableStateOf<Long?>(null) }
+    val context = LocalContext.current
+    val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
     val accents = listOf(Color(0xFF7657FF), Color(0xFF087E8B), Color(0xFFB54772), Color(0xFFCA8A04))
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -77,7 +82,22 @@ private fun HomiDesignApp() {
                 if (editorOpen) {
                     EditorScreen(
                         Modifier.weight(1f), titleText, { titleText = it }, subtitleText, { subtitleText = it },
-                        accents, selectedColor, { selectedColor = it }, onBack = { editorOpen = false }
+                        accents, selectedColor, { selectedColor = it }, onBack = { editorOpen = false },
+                        onSave = {
+                            val id = editingId ?: System.currentTimeMillis()
+                            val item = DesignItem(id, titleText, subtitleText, selectedColor)
+                            DesignRepository.save(context, item)
+                            savedDesigns.removeAll { it.id == id }; savedDesigns.add(0, item); editingId = id
+                            Toast.makeText(context, "تم حفظ التصميم على الجهاز", Toast.LENGTH_SHORT).show()
+                        },
+                        onExportPng = {
+                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor)), Toast.LENGTH_LONG).show() }
+                            catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
+                        },
+                        onExportPdf = {
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor)), Toast.LENGTH_LONG).show() }
+                            catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
+                        }
                     )
                 } else {
                     when (selectedTab) {
@@ -186,7 +206,8 @@ private fun HomeScreen(
 @Composable
 private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
-    accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit, onBack: () -> Unit
+    accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit, onBack: () -> Unit,
+    onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
@@ -230,8 +251,18 @@ private fun EditorScreen(
             }
         }
         Spacer(Modifier.height(16.dp))
-        OutlinedButton(onClick = { }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp)) {
-            Icon(Icons.Default.Save, null); Spacer(Modifier.width(8.dp)); Text("حفظ التصميم — قريبًا")
+        Button(onClick = onSave, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple)) {
+            Icon(Icons.Default.Save, null); Spacer(Modifier.width(8.dp)); Text("حفظ التصميم")
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onExportPng, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("تصدير PNG")
+            }
+            OutlinedButton(onClick = onExportPdf, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Default.PictureAsPdf, null); Spacer(Modifier.width(5.dp)); Text("تصدير PDF")
+            }
         }
         Spacer(Modifier.height(16.dp))
     }
