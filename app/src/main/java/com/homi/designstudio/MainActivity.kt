@@ -35,6 +35,8 @@ private val Purple = Color(0xFF9B7BFF)
 private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
+private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -176,24 +178,31 @@ private fun HomeScreen(
         }
         Spacer(Modifier.height(14.dp))
         val templates = listOf(
-            Triple("صباح الخير", "يوم جديد، فرصة جديدة", accents[0]),
-            Triple("كن مختلفًا", "اترك أثرًا جميلًا", accents[1]),
-            Triple("كل عام وأنتم بخير", "أيامكم فرح وسلام", accents[2]),
-            Triple("ابدأ من جديد", "خطوة صغيرة تصنع الفرق", accents[3])
-        )
+            DesignTemplate("صباح الخير", "يوم جديد، فرصة جديدة", accents[0], "حالات"),
+            DesignTemplate("كن مختلفًا", "اترك أثرًا جميلًا", accents[1], "اقتباسات"),
+            DesignTemplate("كل عام وأنتم بخير", "أيامكم فرح وسلام", accents[2], "تهاني"),
+            DesignTemplate("ابدأ من جديد", "خطوة صغيرة تصنع الفرق", accents[3], "اقتباسات"),
+            DesignTemplate("نجاحك يبدأ الآن", "خطط بذكاء وابدأ بخطوة", accents[0], "أعمال"),
+            DesignTemplate("مساء الورد", "راحة وطمأنينة لقلبك", accents[2], "حالات"),
+            DesignTemplate("ألف مبروك", "فرحتكم تكمل فرحتنا", accents[1], "تهاني"),
+            DesignTemplate("فكرة تصنع فرقًا", "ابتكر شيئًا يستحق المشاركة", accents[3], "أعمال")
+        ).filter { selectedCategory == "الكل" || it.category == selectedCategory }
+        if (templates.isEmpty()) {
+            Text("لا توجد قوالب في هذا التصنيف حاليًا.", color = Muted, modifier = Modifier.padding(vertical = 20.dp))
+        }
         templates.chunked(2).forEach { rowItems ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 rowItems.forEach { item ->
                     Column(Modifier.weight(1f).padding(bottom = 12.dp)) {
                         Box(Modifier.fillMaxWidth().height(158.dp).clip(RoundedCornerShape(20.dp))
-                            .background(Brush.linearGradient(listOf(item.third, Color(0xFF171B31))))
-                            .clickable { onTemplate(item.first) }.padding(14.dp), contentAlignment = Alignment.Center) {
+                            .background(Brush.linearGradient(listOf(item.color, Color(0xFF171B31))))
+                            .clickable { onTemplate(item.title) }.padding(14.dp), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.height(10.dp))
                                 Text(item.first, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(5.dp))
-                                Text(item.second, color = Color.White.copy(alpha = .8f), fontSize = 11.sp, textAlign = TextAlign.Center)
+                                Text(item.subtitle, color = Color.White.copy(alpha = .8f), fontSize = 11.sp, textAlign = TextAlign.Center)
                             }
                         }
                         Spacer(Modifier.height(7.dp))
