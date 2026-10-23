@@ -174,7 +174,7 @@ object DesignExporter {
 
     fun exportPdf(context: Context, item: DesignItem): String {
         val name = "HomiDesign_${item.id}.pdf"
-        val bitmap = render(item)
+        val bitmap = render(context, item)
         val doc = PdfDocument()
         val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
         // Keep the 4:5 artwork proportional and centered on an A4-sized page.
