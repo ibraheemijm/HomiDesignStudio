@@ -132,8 +132,9 @@ object DesignExporter {
         val name = "HomiDesign_${item.id}.pdf"
         val bitmap = render(item)
         val doc = PdfDocument()
-        val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 744, 1).create())
-        page.canvas.drawBitmap(bitmap, null, Rect(0, 0, 595, 744), Paint(Paint.ANTI_ALIAS_FLAG))
+        val page = doc.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
+        // Keep the 4:5 artwork proportional and centered on an A4-sized page.
+        page.canvas.drawBitmap(bitmap, null, Rect(0, 49, 595, 793), Paint(Paint.ANTI_ALIAS_FLAG))
         doc.finishPage(page)
         try {
             if (Build.VERSION.SDK_INT >= 29) {
