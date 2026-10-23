@@ -23,10 +23,18 @@ data class DesignItem(
     val subtitle: String,
     val colorIndex: Int,
     val savedAt: Long = System.currentTimeMillis(),
-    val extraTexts: List<String> = emptyList()
+    val extraTexts: List<String> = emptyList(),
+    val elementXs: List<Float> = emptyList(),
+    val elementYs: List<Float> = emptyList(),
+    val elementSizes: List<Float> = emptyList(),
+    val elementColors: List<Int> = emptyList(),
+    val elementOrder: List<Int> = emptyList()
 )
 
 private fun Int?.orZero(): Int = this ?: 0
+
+private fun readFloats(o: JSONObject, key: String): List<Float> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optDouble(it)?.toFloat() }
+private fun readInts(o: JSONObject, key: String): List<Int> = (0 until (o.optJSONArray(key)?.length() ?: 0)).mapNotNull { o.optJSONArray(key)?.optInt(it) }
 
 object DesignRepository {
     private const val PREFS = "homi_designs"
@@ -38,7 +46,7 @@ object DesignRepository {
             val a = JSONArray(raw)
             (0 until a.length()).map { i ->
                 val o = a.getJSONObject(i)
-                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) })
+                DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"), (0 until o.optJSONArray("extraTexts")?.length().orZero()).mapNotNull { j -> o.optJSONArray("extraTexts")?.optString(j) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
             }.sortedByDescending { it.savedAt }
         } catch (_: Exception) { emptyList() }
     }
@@ -46,13 +54,13 @@ object DesignRepository {
     fun save(context: Context, item: DesignItem) {
         val list = all(context).filterNot { it.id == item.id } + item
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 
     fun saveDraft(context: Context, item: DesignItem) {
         val draft = JSONObject().put("id", item.id).put("title", item.title).put("subtitle", item.subtitle)
-            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts))
+            .put("colorIndex", item.colorIndex).put("savedAt", item.savedAt).put("extraTexts", JSONArray(item.extraTexts)).put("elementXs", JSONArray(item.elementXs)).put("elementYs", JSONArray(item.elementYs)).put("elementSizes", JSONArray(item.elementSizes)).put("elementColors", JSONArray(item.elementColors)).put("elementOrder", JSONArray(item.elementOrder))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("draft", draft.toString()).apply()
     }
 
@@ -61,12 +69,12 @@ object DesignRepository {
         val o = JSONObject(raw)
         val extras = o.optJSONArray("extraTexts")
         DesignItem(o.optLong("id"), o.optString("title"), o.optString("subtitle"), o.optInt("colorIndex"), o.optLong("savedAt"),
-            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) })
+            (0 until (extras?.length() ?: 0)).mapNotNull { extras?.optString(it) }, readFloats(o, "elementXs"), readFloats(o, "elementYs"), readFloats(o, "elementSizes"), readInts(o, "elementColors"), readInts(o, "elementOrder"))
     } catch (_: Exception) { null }
 
     fun delete(context: Context, id: Long) {
         val a = JSONArray()
-        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts))) }
+        all(context).filterNot { it.id == id }.forEach { a.put(JSONObject().put("id", it.id).put("title", it.title).put("subtitle", it.subtitle).put("colorIndex", it.colorIndex).put("savedAt", it.savedAt).put("extraTexts", JSONArray(it.extraTexts)).put("elementXs", JSONArray(it.elementXs)).put("elementYs", JSONArray(it.elementYs)).put("elementSizes", JSONArray(it.elementSizes)).put("elementColors", JSONArray(it.elementColors)).put("elementOrder", JSONArray(it.elementOrder))) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, a.toString()).apply()
     }
 }
@@ -90,20 +98,19 @@ object DesignExporter {
         p.style = Paint.Style.FILL
         p.color = AColor.WHITE
         p.textAlign = Paint.Align.CENTER
-        p.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        p.textSize = 66f
-        drawLines(c, item.title.ifBlank { "عنوان تصميمك" }, p, 540f, 530f, 850f, 84f)
-        p.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        p.textSize = 40f
-        p.color = 0xE6FFFFFF.toInt()
-        drawLines(c, item.subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, p, 540f, 720f, 850f, 56f)
-        p.textSize = 32f
-        p.color = 0xE6FFFFFF.toInt()
-        p.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        val extras = item.extraTexts.take(4)
-        extras.forEachIndexed { index, value ->
-            p.textSize = 32f
-            drawLines(c, value.ifBlank { "عنصر نصي ${index + 1}" }, p, 540f, 830f + index * 72f, 850f, 40f)
+        val texts = listOf(item.title.ifBlank { "عنوان تصميمك" }, item.subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }) + item.extraTexts.take(4)
+        val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
+        val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
+        val order = (item.elementOrder + texts.indices.filterNot { it in item.elementOrder }).filter { it in texts.indices }
+        order.forEach { index ->
+            p.textAlign = Paint.Align.CENTER
+            p.color = item.elementColors.getOrNull(index)?.let { intArrayOf(0xFFFFFFFF.toInt(), 0xFF53E0D0.toInt(), 0xFFFFD166.toInt(), 0xFFFF8FAB.toInt())[it.coerceIn(0, 3)] } ?: 0xE6FFFFFF.toInt()
+            p.typeface = Typeface.create(if (index == 0) "sans-serif" else "sans-serif-medium", if (index == 0) Typeface.BOLD else Typeface.NORMAL)
+            val sizeSp = item.elementSizes.getOrNull(index) ?: defaultSizes[index.coerceAtMost(defaultSizes.lastIndex)]
+            p.textSize = sizeSp * 2.35f
+            val x = (item.elementXs.getOrNull(index) ?: .5f).coerceIn(.08f, .92f) * w
+            val y = (item.elementYs.getOrNull(index) ?: defaultYs[index.coerceAtMost(defaultYs.lastIndex)]) * h
+            drawLines(c, texts[index], p, x, y, 850f, p.textSize * 1.22f)
         }
         p.textSize = 24f
         p.color = 0xBFFFFFFF.toInt()

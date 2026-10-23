@@ -13,6 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,7 +40,7 @@ private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
 private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
-private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,9 +58,15 @@ private fun HomiDesignApp() {
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
     var extraTexts by remember { mutableStateOf(listOf<String>()) }
     var selectedColor by remember { mutableIntStateOf(0) }
+    var elementXs by remember { mutableStateOf(listOf(.5f, .5f, .5f, .5f, .5f, .5f)) }
+    var elementYs by remember { mutableStateOf(listOf(.392f, .533f, .615f, .668f, .721f, .774f)) }
+    var elementSizes by remember { mutableStateOf(listOf(28f, 15f, 13f, 13f, 13f, 13f)) }
+    var elementColors by remember { mutableStateOf(listOf(0, 0, 0, 0, 0, 0)) }
+    var elementOrder by remember { mutableStateOf(listOf(0, 1, 2, 3, 4, 5)) }
+    var selectedElement by remember { mutableIntStateOf(0) }
     val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
-    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts) }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder) }
     val recordEdit = {
         undoStack.add(currentSnapshot())
         if (undoStack.size > 50) undoStack.removeAt(0)
@@ -67,15 +77,16 @@ private fun HomiDesignApp() {
         subtitleText = snapshot.subtitle
         selectedColor = snapshot.colorIndex
         extraTexts = snapshot.extraTexts
+        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order
     }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
     var hasDraft by remember { mutableStateOf(DesignRepository.draft(context) != null) }
-    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, editingId) {
+    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, editingId) {
         if (editorOpen) {
-            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts))
+            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder))
             hasDraft = true
         }
     }
@@ -109,23 +120,29 @@ private fun HomiDesignApp() {
                     EditorScreen(
                         Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
                         accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
+                        elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder,
+                        selectedElement = selectedElement, onSelectElement = { selectedElement = it },
+                        onMoveElement = { i, dx, dy -> elementXs = elementXs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dx).coerceIn(.08f, .92f) }; elementYs = elementYs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dy).coerceIn(.08f, .9f) } },
+                        onSizeElement = { i, size -> elementSizes = elementSizes.toMutableList().also { while (it.size <= i) it.add(13f); it[i] = size } },
+                        onColorElement = { i, color -> elementColors = elementColors.toMutableList().also { while (it.size <= i) it.add(0); it[i] = color } },
+                        onLayerElement = { i, delta -> val order = (elementOrder.filter { it < 2 + extraTexts.size } + (0 until (2 + extraTexts.size)).filterNot { it in elementOrder }).toMutableList(); val at = order.indexOf(i); val to = (at + delta).coerceIn(0, order.lastIndex); if (at >= 0) { val tmp = order[at]; order[at] = order[to]; order[to] = tmp; elementOrder = order } },
                         canUndo = undoStack.isNotEmpty(), canRedo = redoStack.isNotEmpty(),
                         onUndo = { if (undoStack.isNotEmpty()) { redoStack.add(currentSnapshot()); applySnapshot(undoStack.removeAt(undoStack.lastIndex)) } },
                         onRedo = { if (redoStack.isNotEmpty()) { undoStack.add(currentSnapshot()); applySnapshot(redoStack.removeAt(redoStack.lastIndex)) } },
                         onBack = { editorOpen = false },
                         onSave = {
                             val id = editingId ?: System.currentTimeMillis()
-                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts)
+                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder)
                             DesignRepository.save(context, item)
                             savedDesigns.removeAll { it.id == id }; savedDesigns.add(0, item); editingId = id
                             Toast.makeText(context, "تم حفظ التصميم على الجهاز", Toast.LENGTH_SHORT).show()
                         },
                         onExportPng = {
-                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
@@ -134,16 +151,16 @@ private fun HomiDesignApp() {
                         0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
                             onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
                                 titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts
-                                selectedColor = draft.colorIndex.coerceIn(0, 3); editingId = null; editorOpen = true
+                                selectedColor = draft.colorIndex.coerceIn(0, 3); elementXs = draft.elementXs.ifEmpty { elementXs }; elementYs = draft.elementYs.ifEmpty { elementYs }; elementSizes = draft.elementSizes.ifEmpty { elementSizes }; elementColors = draft.elementColors.ifEmpty { elementColors }; elementOrder = draft.elementOrder.ifEmpty { elementOrder }; editingId = null; editorOpen = true
                                 undoStack.clear(); redoStack.clear()
                             } },
-                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0 },
-                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); editorOpen = true })
+                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); selectedElement = 0; undoStack.clear(); redoStack.clear() },
+                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); selectedElement = 0; editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
@@ -276,9 +293,13 @@ private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
     extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
+    elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>,
+    selectedElement: Int, onSelectElement: (Int) -> Unit, onMoveElement: (Int, Float, Float) -> Unit,
+    onSizeElement: (Int, Float) -> Unit, onColorElement: (Int, Int) -> Unit, onLayerElement: (Int, Int) -> Unit,
     canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
     onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
+    LaunchedEffect(extraTexts.size) { if (selectedElement >= 2 + extraTexts.size) onSelectElement((1 + extraTexts.size).coerceAtLeast(0)) }
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
@@ -286,22 +307,65 @@ private fun EditorScreen(
             IconButton(onClick = onUndo, enabled = canUndo) { Icon(Icons.Default.Undo, "تراجع", tint = if (canUndo) Cyan else Muted) }
             IconButton(onClick = onRedo, enabled = canRedo) { Icon(Icons.Default.Redo, "إعادة", tint = if (canRedo) Cyan else Muted) }
         }
-        Box(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
+        val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
+        val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
+        val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
+        val visibleOrder = (elementOrder + canvasTexts.indices.filterNot { it in elementOrder }).filter { it in canvasTexts.indices }
+        BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(accents[selectedColor], Color(0xFF121729), Color(0xFF080B14))))
-            .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp)).padding(24.dp),
-            contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(30.dp))
-                Spacer(Modifier.height(22.dp))
-                Text(title.ifBlank { "عنوان تصميمك" }, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(12.dp))
-                Text(subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, color = Color.White.copy(alpha = .85f), fontSize = 15.sp, textAlign = TextAlign.Center)
-                extraTexts.take(4).forEachIndexed { index, text ->
-                    Spacer(Modifier.height(10.dp))
-                    Text(text.ifBlank { "عنصر نصي ${index + 1}" }, color = Color.White.copy(alpha = .92f), fontSize = 13.sp, textAlign = TextAlign.Center)
+            .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp))) {
+            val canvasWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+            val canvasHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+            Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .45f), modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(24.dp))
+            visibleOrder.forEach { index ->
+                val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
+                val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
+                Text(value, modifier = Modifier.fillMaxWidth(.8f)
+                    .offset { IntOffset(((elementXs.getOrElse(index) { .5f } * canvasWidth) - canvasWidth * .4f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] } * canvasHeight).roundToInt()) }
+                    .pointerInput(index, elementXs, elementYs) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            onSelectElement(index)
+                            onMoveElement(index, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight)
+                        }
+                    }
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selectedElement == index) Color.White.copy(alpha = .10f) else Color.Transparent)
+                    .border(if (selectedElement == index) 1.dp else 0.dp, if (selectedElement == index) Cyan.copy(alpha = .8f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable { onSelectElement(index) }.padding(horizontal = 4.dp, vertical = 3.dp),
+                    color = palette[elementColors.getOrElse(index) { 0 }.coerceIn(0, palette.lastIndex)],
+                    fontSize = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] }).sp,
+                    fontWeight = if (index == 0) FontWeight.ExtraBold else FontWeight.Medium,
+                    textAlign = TextAlign.Center, lineHeight = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] } * 1.2f).sp
+                )
+            }
+            Text("HOMI DESIGN", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+                color = Color.White.copy(alpha = .45f), fontSize = 9.sp, letterSpacing = 3.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Text("أدوات العنصر المحدد", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(when (selectedElement) { 0 -> "العنوان"; 1 -> "النص الفرعي"; else -> "النص الإضافي ${selectedElement - 1}" }, color = Cyan, fontSize = 12.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("الحجم", color = Muted, fontSize = 12.sp)
+                    Slider(value = elementSizes.getOrElse(selectedElement) { defaultSizes[selectedElement.coerceAtMost(5)] },
+                        onValueChange = { onSizeElement(selectedElement, it) }, valueRange = 10f..48f,
+                        modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Purple))
                 }
-                Spacer(Modifier.height(26.dp))
-                Text("HOMI DESIGN", color = Color.White.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 3.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("اللون", color = Muted, fontSize = 12.sp)
+                    listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { index, color ->
+                        Box(Modifier.size(30.dp).clip(CircleShape).background(color)
+                            .border(if (elementColors.getOrElse(selectedElement) { 0 } == index) 3.dp else 0.dp, Purple, CircleShape)
+                            .clickable { onColorElement(selectedElement, index) })
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { onLayerElement(selectedElement, -1) }) { Icon(Icons.Default.ArrowDownward, "إلى الخلف", tint = Cyan) }
+                    IconButton(onClick = { onLayerElement(selectedElement, 1) }) { Icon(Icons.Default.ArrowUpward, "إلى الأمام", tint = Cyan) }
+                }
+                Text("اسحب النص داخل اللوحة لتحريك موضعه. اختر النص أولًا لتعديل حجمه ولونه وترتيبه.", color = Muted, fontSize = 11.sp)
             }
         }
         Spacer(Modifier.height(18.dp))
