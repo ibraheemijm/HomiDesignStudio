@@ -52,6 +52,7 @@ private fun HomiDesignApp() {
     var titleText by remember { mutableStateOf("اصنع شيئًا مميزًا") }
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
     var extraTexts by remember { mutableStateOf(listOf<String>()) }
+    var selectedColor by remember { mutableIntStateOf(0) }
     val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts) }
@@ -66,7 +67,6 @@ private fun HomiDesignApp() {
         selectedColor = snapshot.colorIndex
         extraTexts = snapshot.extraTexts
     }
-    var selectedColor by remember { mutableIntStateOf(0) }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
