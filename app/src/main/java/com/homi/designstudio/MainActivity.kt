@@ -347,14 +347,14 @@ private fun EditorScreen(
                     .then(if (shape.type == "circle") Modifier.clip(CircleShape) else Modifier.clip(RoundedCornerShape(5.dp)))
                     .background(if (shape.type == "line") shapeColor else shapeColor.copy(alpha = .18f))
                     .border(if (selectedShape == shapeIndex) 2.dp else 1.dp, if (selectedShape == shapeIndex) Cyan else shapeColor, if (shape.type == "circle") CircleShape else RoundedCornerShape(5.dp))
-                    .pointerInput(shapeIndex, shapes) { detectDragGestures { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
+                    .pointerInput(shapeIndex) { detectDragGestures { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
             }
             visibleOrder.forEach { index ->
                 val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
                 val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
                 Text(value, modifier = Modifier.fillMaxWidth(.96f)
                      .offset { IntOffset(((elementXs.getOrElse(index) { .5f }.coerceIn(.01f, .99f) * canvasWidth) - canvasWidth * .48f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] }.coerceIn(.02f, .98f) * canvasHeight - 36f).roundToInt()) }
-                    .pointerInput(index, elementXs, elementYs) {
+                    .pointerInput(index) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
                             onSelectElement(index)
