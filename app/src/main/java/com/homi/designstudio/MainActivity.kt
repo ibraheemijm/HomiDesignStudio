@@ -35,6 +35,9 @@ private val Purple = Color(0xFF9B7BFF)
 private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
+private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,13 +49,36 @@ class MainActivity : ComponentActivity() {
 private fun HomiDesignApp() {
     var selectedTab by remember { mutableStateOf(0) }
     var selectedCategory by remember { mutableStateOf("الكل") }
+    var templateQuery by remember { mutableStateOf("") }
     var titleText by remember { mutableStateOf("اصنع شيئًا مميزًا") }
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
+    var extraTexts by remember { mutableStateOf(listOf<String>()) }
     var selectedColor by remember { mutableIntStateOf(0) }
+    val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
+    val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts) }
+    val recordEdit = {
+        undoStack.add(currentSnapshot())
+        if (undoStack.size > 50) undoStack.removeAt(0)
+        redoStack.clear()
+    }
+    val applySnapshot: (EditorSnapshot) -> Unit = { snapshot ->
+        titleText = snapshot.title
+        subtitleText = snapshot.subtitle
+        selectedColor = snapshot.colorIndex
+        extraTexts = snapshot.extraTexts
+    }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
+    var hasDraft by remember { mutableStateOf(DesignRepository.draft(context) != null) }
+    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, editingId) {
+        if (editorOpen) {
+            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts))
+            hasDraft = true
+        }
+    }
     val accents = listOf(Color(0xFF7657FF), Color(0xFF087E8B), Color(0xFFB54772), Color(0xFFCA8A04))
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -81,34 +107,43 @@ private fun HomiDesignApp() {
                 }
                 if (editorOpen) {
                     EditorScreen(
-                        Modifier.weight(1f), titleText, { titleText = it }, subtitleText, { subtitleText = it },
-                        accents, selectedColor, { selectedColor = it }, onBack = { editorOpen = false },
+                        Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
+                        accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
+                        canUndo = undoStack.isNotEmpty(), canRedo = redoStack.isNotEmpty(),
+                        onUndo = { if (undoStack.isNotEmpty()) { redoStack.add(currentSnapshot()); applySnapshot(undoStack.removeAt(undoStack.lastIndex)) } },
+                        onRedo = { if (redoStack.isNotEmpty()) { undoStack.add(currentSnapshot()); applySnapshot(redoStack.removeAt(redoStack.lastIndex)) } },
+                        onBack = { editorOpen = false },
                         onSave = {
                             val id = editingId ?: System.currentTimeMillis()
-                            val item = DesignItem(id, titleText, subtitleText, selectedColor)
+                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts)
                             DesignRepository.save(context, item)
                             savedDesigns.removeAll { it.id == id }; savedDesigns.add(0, item); editingId = id
                             Toast.makeText(context, "تم حفظ التصميم على الجهاز", Toast.LENGTH_SHORT).show()
                         },
                         onExportPng = {
-                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
                 } else {
                     when (selectedTab) {
-                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, accents, selectedColor,
-                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; selectedColor = 0 },
-                            onTemplate = { text -> editingId = null; titleText = text; editorOpen = true })
+                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
+                            onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
+                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts
+                                selectedColor = draft.colorIndex.coerceIn(0, 3); editingId = null; editorOpen = true
+                                undoStack.clear(); redoStack.clear()
+                            } },
+                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0 },
+                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
@@ -134,8 +169,9 @@ private fun HomiDesignApp() {
 
 @Composable
 private fun HomeScreen(
-    modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit, accents: List<Color>, selectedColor: Int,
-    onNew: () -> Unit, onTemplate: (String) -> Unit
+    modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit,
+    templateQuery: String, onTemplateQuery: (String) -> Unit, accents: List<Color>, selectedColor: Int,
+    hasDraft: Boolean, onRestoreDraft: () -> Unit, onNew: () -> Unit, onTemplate: (String) -> Unit
 ) {
     val categories = listOf("الكل", "حالات", "اقتباسات", "تهاني", "أعمال")
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -155,9 +191,29 @@ private fun HomeScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("إنشاء تصميم جديد", fontWeight = FontWeight.Bold)
                 }
+                if (hasDraft) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onRestoreDraft, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp)) {
+                        Icon(Icons.Default.Restore, null, tint = Cyan); Spacer(Modifier.width(8.dp))
+                        Text("استعادة آخر مسودة", color = Cyan)
+                    }
+                }
             }
         }
         Spacer(Modifier.height(22.dp))
+        OutlinedTextField(
+            value = templateQuery, onValueChange = onTemplateQuery,
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            placeholder = { Text("ابحث عن قالب...", color = Muted) },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = Cyan) },
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Purple, unfocusedBorderColor = Color(0xFF30374C),
+                focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                cursorColor = Cyan, focusedContainerColor = SurfaceGlass, unfocusedContainerColor = SurfaceGlass
+            )
+        )
+        Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("قوالب مختارة", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
             Text("اكتشف المزيد", fontSize = 12.sp, color = Cyan)
@@ -175,28 +231,36 @@ private fun HomeScreen(
         }
         Spacer(Modifier.height(14.dp))
         val templates = listOf(
-            Triple("صباح الخير", "يوم جديد، فرصة جديدة", accents[0]),
-            Triple("كن مختلفًا", "اترك أثرًا جميلًا", accents[1]),
-            Triple("كل عام وأنتم بخير", "أيامكم فرح وسلام", accents[2]),
-            Triple("ابدأ من جديد", "خطوة صغيرة تصنع الفرق", accents[3])
-        )
+            DesignTemplate("صباح الخير", "يوم جديد، فرصة جديدة", accents[0], "حالات"),
+            DesignTemplate("كن مختلفًا", "اترك أثرًا جميلًا", accents[1], "اقتباسات"),
+            DesignTemplate("كل عام وأنتم بخير", "أيامكم فرح وسلام", accents[2], "تهاني"),
+            DesignTemplate("ابدأ من جديد", "خطوة صغيرة تصنع الفرق", accents[3], "اقتباسات"),
+            DesignTemplate("نجاحك يبدأ الآن", "خطط بذكاء وابدأ بخطوة", accents[0], "أعمال"),
+            DesignTemplate("مساء الورد", "راحة وطمأنينة لقلبك", accents[2], "حالات"),
+            DesignTemplate("ألف مبروك", "فرحتكم تكمل فرحتنا", accents[1], "تهاني"),
+            DesignTemplate("فكرة تصنع فرقًا", "ابتكر شيئًا يستحق المشاركة", accents[3], "أعمال")
+        ).filter { (selectedCategory == "الكل" || it.category == selectedCategory) &&
+            (templateQuery.isBlank() || it.title.contains(templateQuery.trim(), ignoreCase = true) || it.subtitle.contains(templateQuery.trim(), ignoreCase = true)) }
+        if (templates.isEmpty()) {
+            Text("لا توجد قوالب في هذا التصنيف حاليًا.", color = Muted, modifier = Modifier.padding(vertical = 20.dp))
+        }
         templates.chunked(2).forEach { rowItems ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 rowItems.forEach { item ->
                     Column(Modifier.weight(1f).padding(bottom = 12.dp)) {
                         Box(Modifier.fillMaxWidth().height(158.dp).clip(RoundedCornerShape(20.dp))
-                            .background(Brush.linearGradient(listOf(item.third, Color(0xFF171B31))))
-                            .clickable { onTemplate(item.first) }.padding(14.dp), contentAlignment = Alignment.Center) {
+                            .background(Brush.linearGradient(listOf(item.color, Color(0xFF171B31))))
+                            .clickable { onTemplate(item.title) }.padding(14.dp), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.height(10.dp))
-                                Text(item.first, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                                Text(item.title, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(5.dp))
-                                Text(item.second, color = Color.White.copy(alpha = .8f), fontSize = 11.sp, textAlign = TextAlign.Center)
+                                Text(item.subtitle, color = Color.White.copy(alpha = .8f), fontSize = 11.sp, textAlign = TextAlign.Center)
                             }
                         }
                         Spacer(Modifier.height(7.dp))
-                        Text(item.first, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(item.title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("قالب قابل للتعديل", color = Muted, fontSize = 11.sp)
                     }
                 }
@@ -210,11 +274,18 @@ private fun HomeScreen(
 @Composable
 private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
-    accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit, onBack: () -> Unit,
+    accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
+    extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
+    canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
     onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onUndo, enabled = canUndo) { Icon(Icons.Default.Undo, "تراجع", tint = if (canUndo) Cyan else Muted) }
+            IconButton(onClick = onRedo, enabled = canRedo) { Icon(Icons.Default.Redo, "إعادة", tint = if (canRedo) Cyan else Muted) }
+        }
         Box(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(accents[selectedColor], Color(0xFF121729), Color(0xFF080B14))))
             .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp)).padding(24.dp),
@@ -225,6 +296,10 @@ private fun EditorScreen(
                 Text(title.ifBlank { "عنوان تصميمك" }, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(12.dp))
                 Text(subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, color = Color.White.copy(alpha = .85f), fontSize = 15.sp, textAlign = TextAlign.Center)
+                extraTexts.take(4).forEachIndexed { index, text ->
+                    Spacer(Modifier.height(10.dp))
+                    Text(text.ifBlank { "عنصر نصي ${index + 1}" }, color = Color.White.copy(alpha = .92f), fontSize = 13.sp, textAlign = TextAlign.Center)
+                }
                 Spacer(Modifier.height(26.dp))
                 Text("HOMI DESIGN", color = Color.White.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 3.sp)
             }
@@ -241,6 +316,28 @@ private fun EditorScreen(
                 Text("النص الفرعي", color = Muted, fontSize = 12.sp)
                 StyledField(subtitle, onSubtitle, "أضف وصفًا قصيرًا")
             }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("عناصر نصية إضافية", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = { if (extraTexts.size < 4) onExtraTexts(extraTexts + "") }) {
+                Icon(Icons.Default.Add, null, tint = Cyan); Text("إضافة نص", color = Cyan)
+            }
+        }
+        if (extraTexts.isEmpty()) Text("أضف عناوين أو عبارات مستقلة إلى تصميمك.", color = Muted, fontSize = 12.sp)
+        extraTexts.forEachIndexed { index, text ->
+            GlassCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("العنصر ${index + 1}", color = Muted, fontSize = 11.sp)
+                        StyledField(text, { value -> onExtraTexts(extraTexts.toMutableList().also { it[index] = value }) }, "اكتب نص العنصر")
+                    }
+                    IconButton(onClick = { onExtraTexts(extraTexts.toMutableList().also { it.removeAt(index) }) }) {
+                        Icon(Icons.Default.DeleteOutline, "حذف العنصر", tint = Color(0xFFFF718B))
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
         Spacer(Modifier.height(16.dp))
         Text("اختر لوحة الألوان", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
