@@ -36,6 +36,7 @@ private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
 private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +52,20 @@ private fun HomiDesignApp() {
     var titleText by remember { mutableStateOf("اصنع شيئًا مميزًا") }
     var subtitleText by remember { mutableStateOf("فكرتك تستحق أن تُرى") }
     var extraTexts by remember { mutableStateOf(listOf<String>()) }
+    val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
+    val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts) }
+    val recordEdit = {
+        undoStack.add(currentSnapshot())
+        if (undoStack.size > 50) undoStack.removeAt(0)
+        redoStack.clear()
+    }
+    val applySnapshot: (EditorSnapshot) -> Unit = { snapshot ->
+        titleText = snapshot.title
+        subtitleText = snapshot.subtitle
+        selectedColor = snapshot.colorIndex
+        extraTexts = snapshot.extraTexts
+    }
     var selectedColor by remember { mutableIntStateOf(0) }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
@@ -84,8 +99,12 @@ private fun HomiDesignApp() {
                 }
                 if (editorOpen) {
                     EditorScreen(
-                        Modifier.weight(1f), titleText, { titleText = it }, subtitleText, { subtitleText = it },
-                        accents, selectedColor, { selectedColor = it }, extraTexts, { extraTexts = it }, onBack = { editorOpen = false },
+                        Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
+                        accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
+                        canUndo = undoStack.isNotEmpty(), canRedo = redoStack.isNotEmpty(),
+                        onUndo = { if (undoStack.isNotEmpty()) { redoStack.add(currentSnapshot()); applySnapshot(undoStack.removeAt(undoStack.lastIndex)) } },
+                        onRedo = { if (redoStack.isNotEmpty()) { undoStack.add(currentSnapshot()); applySnapshot(redoStack.removeAt(redoStack.lastIndex)) } },
+                        onBack = { editorOpen = false },
                         onSave = {
                             val id = editingId ?: System.currentTimeMillis()
                             val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts)
@@ -221,11 +240,17 @@ private fun HomeScreen(
 private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
-    extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit, onBack: () -> Unit,
+    extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
+    canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
     onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Icon(Icons.Default.ArrowForward, null); Text("العودة للقوالب") }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onUndo, enabled = canUndo) { Icon(Icons.Default.Undo, "تراجع", tint = if (canUndo) Cyan else Muted) }
+            IconButton(onClick = onRedo, enabled = canRedo) { Icon(Icons.Default.Redo, "إعادة", tint = if (canRedo) Cyan else Muted) }
+        }
         Box(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(accents[selectedColor], Color(0xFF121729), Color(0xFF080B14))))
             .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp)).padding(24.dp),
