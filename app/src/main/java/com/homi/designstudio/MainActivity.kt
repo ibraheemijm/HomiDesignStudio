@@ -102,10 +102,14 @@ private fun HomiDesignApp() {
                 } else {
                     when (selectedTab) {
                         0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, accents, selectedColor,
-                            onNew = { editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى" },
-                            onTemplate = { text -> titleText = text; editorOpen = true })
-                        1 -> SimpleState(Modifier.weight(1f), "قوالبي", "ستظهر هنا تصاميمك المحفوظة على الجهاز.", Icons.Default.Dashboard)
-                        2 -> SimpleState(Modifier.weight(1f), "المحفوظات", "احتفظ بتصاميمك المفضلة للوصول إليها بسرعة.", Icons.Default.Bookmark)
+                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; selectedColor = 0 },
+                            onTemplate = { text -> editingId = null; titleText = text; editorOpen = true })
+                        1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
+                        2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; selectedColor = item.colorIndex.coerceIn(0, 3); editingId = item.id; editorOpen = true },
+                            onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
                 }
@@ -302,4 +306,43 @@ private fun GlassCard(modifier: Modifier = Modifier, content: @Composable Column
     Column(modifier.clip(RoundedCornerShape(24.dp))
         .background(Color(0xAA171D2E))
         .border(1.dp, Color.White.copy(alpha = .10f), RoundedCornerShape(24.dp)), content = content)
+}
+
+
+@Composable
+private fun SavedDesignsScreen(
+    modifier: Modifier = Modifier,
+    items: List<DesignItem>,
+    onOpen: (DesignItem) -> Unit,
+    onDelete: (DesignItem) -> Unit
+) {
+    if (items.isEmpty()) {
+        SimpleState(modifier, "لا توجد تصاميم محفوظة", "افتح محرر التصميم واضغط «حفظ التصميم» لتظهر أعمالك هنا.", Icons.Default.Dashboard)
+        return
+    }
+    val palette = listOf(Color(0xFF7657FF), Color(0xFF087E8B), Color(0xFFB54772), Color(0xFFCA8A04))
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text("تصاميمك على هذا الجهاز", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        items.forEach { item ->
+            GlassCard(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))
+                        .background(Brush.linearGradient(listOf(palette[item.colorIndex.coerceIn(0, 3)], Background))),
+                        contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.AutoAwesome, null, tint = Color.White)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title.ifBlank { "بدون عنوان" }, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        Text(item.subtitle, color = Muted, fontSize = 12.sp, maxLines = 2)
+                    }
+                    IconButton(onClick = { onOpen(item) }) { Icon(Icons.Default.Edit, "تعديل", tint = Cyan) }
+                    IconButton(onClick = { onDelete(item) }) { Icon(Icons.Default.DeleteOutline, "حذف", tint = Color(0xFFFF718B)) }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        Spacer(Modifier.height(16.dp))
+    }
 }
