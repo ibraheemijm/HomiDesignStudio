@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.content.Intent
 import android.graphics.Typeface
 import java.io.File
+import java.util.zip.ZipInputStream
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -48,14 +49,9 @@ private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
 private fun fontFamilyFromId(id: String): FontFamily = try {
-    if (id.startsWith("file:")) FontFamily(Typeface.createFromFile(File(id.removePrefix("file:"))))
-    else when (id) {
-        "serif" -> FontFamily.Serif
-        "monospace" -> FontFamily.Monospace
-        "cursive" -> FontFamily.Cursive
-        "sans-serif-light" -> FontFamily.SansSerif
-        else -> FontFamily.SansSerif
-    }
+    val typeface = if (id.startsWith("file:")) Typeface.createFromFile(File(id.removePrefix("file:")))
+        else Typeface.create(id, Typeface.NORMAL)
+    FontFamily(typeface)
 } catch (_: Exception) { FontFamily.SansSerif }
 
 private val builtInFonts = listOf(
@@ -192,10 +188,10 @@ private fun HomiDesignApp() {
                         0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
                             onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
                                 titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts; imageUri = draft.imageUri; imageX = draft.imageX; imageY = draft.imageY; imageSize = draft.imageSize; shapes = draft.shapes
-                                selectedColor = draft.colorIndex.coerceIn(0, 3); elementXs = draft.elementXs.ifEmpty { elementXs }; elementYs = draft.elementYs.ifEmpty { elementYs }; elementSizes = draft.elementSizes.ifEmpty { elementSizes }; elementColors = draft.elementColors.ifEmpty { elementColors }; elementOrder = draft.elementOrder.ifEmpty { elementOrder }; editingId = null; editorOpen = true
+                                selectedColor = draft.colorIndex.coerceIn(0, 3); elementXs = draft.elementXs.ifEmpty { elementXs }; elementYs = draft.elementYs.ifEmpty { elementYs }; elementSizes = draft.elementSizes.ifEmpty { elementSizes }; elementColors = draft.elementColors.ifEmpty { elementColors }; elementOrder = draft.elementOrder.ifEmpty { elementOrder }; elementFonts = draft.elementFonts.ifEmpty { elementFonts }; editingId = null; editorOpen = true
                                 undoStack.clear(); redoStack.clear()
                             } },
-                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); imageUri = null; imageX = .5f; imageY = .17f; imageSize = .19f; shapes = emptyList(); selectedShape = -1; selectedElement = 0; undoStack.clear(); redoStack.clear() },
+                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); elementFonts = List(6) { "sans-serif" }; imageUri = null; imageX = .5f; imageY = .17f; imageSize = .19f; shapes = emptyList(); selectedShape = -1; selectedElement = 0; undoStack.clear(); redoStack.clear() },
                             onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); imageUri = null; shapes = emptyList(); selectedShape = -1; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); elementFonts = List(6) { "sans-serif" }; selectedElement = 0; editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
                             onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; elementFonts = item.elementFonts.ifEmpty { elementFonts }; imageUri = null; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
@@ -424,17 +420,47 @@ private fun EditorScreen(
                         try {
                             val name = (uri.lastPathSegment ?: "ImportedFont.ttf").substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
                             val ext = name.substringAfterLast('.', "").lowercase()
-                            if (ext !in listOf("ttf", "otf")) {
-                                Toast.makeText(contextForFonts, "اختر ملف خط بصيغة TTF أو OTF", Toast.LENGTH_LONG).show()
+                            val inputStream = contextForFonts.contentResolver.openInputStream(uri) ?: error("تعذر قراءة الملف")
+                            val importedIds = mutableListOf<String>()
+                            if (ext == "zip") {
+                                ZipInputStream(inputStream).use { zip ->
+                                    var entry = zip.nextEntry
+                                    var count = 0
+                                    while (entry != null && count < 40) {
+                                        val entryName = entry.name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                        val entryExt = entryName.substringAfterLast('.', "").lowercase()
+                                        if (!entry.isDirectory && entryExt in listOf("ttf", "otf")) {
+                                            val target = File(fontsDirectory, System.currentTimeMillis().toString() + "_" + entryName)
+                                            target.outputStream().use { output ->
+                                                val buffer = ByteArray(8192)
+                                                var total = 0L
+                                                while (true) {
+                                                    val read = zip.read(buffer)
+                                                    if (read <= 0) break
+                                                    total += read
+                                                    if (total > 25L * 1024L * 1024L) error("ملف الخط أكبر من الحد المسموح")
+                                                    output.write(buffer, 0, read)
+                                                }
+                                            }
+                                            runCatching { Typeface.createFromFile(target) }.onSuccess { importedIds.add("file:" + target.absolutePath) }
+                                            count++
+                                        }
+                                        zip.closeEntry()
+                                        entry = zip.nextEntry
+                                    }
+                                }
+                            } else if (ext in listOf("ttf", "otf")) {
+                                val target = File(fontsDirectory, if (File(fontsDirectory, name).exists()) System.currentTimeMillis().toString() + "_" + name else name)
+                                target.outputStream().use { output -> inputStream.use { it.copyTo(output) } }
+                                runCatching { Typeface.createFromFile(target) }.onSuccess { importedIds.add("file:" + target.absolutePath) }
                             } else {
-                                val target = File(fontsDirectory, name).let { if (it.exists()) File(fontsDirectory, System.currentTimeMillis().toString() + "_" + name) else it }
-                                contextForFonts.contentResolver.openInputStream(uri)?.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
-                                    ?: error("تعذر قراءة ملف الخط")
-                                val fontId = "file:" + target.absolutePath
-                                if (fontId !in importedFontPaths) importedFontPaths.add(fontId)
-                                onFontElement(selectedElement, fontId)
-                                Toast.makeText(contextForFonts, "تم استيراد الخط وتطبيقه", Toast.LENGTH_SHORT).show()
+                                inputStream.close()
+                                error("اختر ملف TTF أو OTF أو ملف ZIP من Google Fonts")
                             }
+                            if (importedIds.isEmpty()) error("لم يُعثر على خط صالح داخل الملف")
+                            importedIds.forEach { if (it !in importedFontPaths) importedFontPaths.add(it) }
+                            onFontElement(selectedElement, importedIds.first())
+                            Toast.makeText(contextForFonts, "تم استيراد ${importedIds.size} خط وتطبيق الأول", Toast.LENGTH_SHORT).show()
                         } catch (e: Exception) {
                             Toast.makeText(contextForFonts, "تعذر استيراد الخط: " + (e.message ?: ""), Toast.LENGTH_LONG).show()
                         }
@@ -466,12 +492,12 @@ private fun EditorScreen(
                         Icon(Icons.Default.FileOpen, null); Spacer(Modifier.width(5.dp)); Text("استيراد خط")
                     }
                     OutlinedButton(onClick = {
-                        contextForFonts.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://fonts.google.com/")))
+                        runCatching { contextForFonts.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://fonts.google.com/"))) }.onFailure { Toast.makeText(contextForFonts, "تعذر فتح Google Fonts", Toast.LENGTH_SHORT).show() }
                     }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Language, null); Spacer(Modifier.width(5.dp)); Text("Google Fonts")
                     }
                 }
-                Text("نزّل ملف TTF أو OTF من Google Fonts ثم اضغط «استيراد خط» واختر الملف من التنزيلات.", color = Muted, fontSize = 11.sp)
+                Text("نزّل عائلة الخطوط ZIP من Google Fonts ثم اخترها عبر «استيراد خط»، أو استورد ملف TTF/OTF مباشرة.", color = Muted, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("اللون", color = Muted, fontSize = 12.sp)
                     listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { index, color ->
