@@ -44,7 +44,7 @@ private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
 private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
-private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float, val shapes: List<ShapeLayer>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,9 +72,11 @@ private fun HomiDesignApp() {
     var elementColors by remember { mutableStateOf(listOf(0, 0, 0, 0, 0, 0)) }
     var elementOrder by remember { mutableStateOf(listOf(0, 1, 2, 3, 4, 5)) }
     var selectedElement by remember { mutableIntStateOf(0) }
+    var shapes by remember { mutableStateOf(listOf<ShapeLayer>()) }
+    var selectedShape by remember { mutableIntStateOf(-1) }
     val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
-    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, imageUri, imageX, imageY, imageSize) }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, null, imageX, imageY, imageSize, shapes) }
     val recordEdit = {
         undoStack.add(currentSnapshot())
         if (undoStack.size > 50) undoStack.removeAt(0)
@@ -85,23 +87,16 @@ private fun HomiDesignApp() {
         subtitleText = snapshot.subtitle
         selectedColor = snapshot.colorIndex
         extraTexts = snapshot.extraTexts
-        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize
+        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize; shapes = snapshot.shapes
     }
     val context = LocalContext.current
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            recordEdit()
-            try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
-            imageUri = uri.toString()
-        }
-    }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
     var hasDraft by remember { mutableStateOf(DesignRepository.draft(context) != null) }
     LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, imageUri, editingId) {
         if (editorOpen) {
-            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize))
+            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes))
             hasDraft = true
         }
     }
@@ -136,11 +131,14 @@ private fun HomiDesignApp() {
                         Modifier.weight(1f), titleText, { value -> recordEdit(); titleText = value }, subtitleText, { value -> recordEdit(); subtitleText = value },
                         accents, selectedColor, { value -> recordEdit(); selectedColor = value }, extraTexts, { value -> recordEdit(); extraTexts = value },
                         elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder,
-                        imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize,
-                        onMoveImage = { dx, dy -> recordEdit(); imageX = (imageX + dx).coerceIn(.08f, .92f); imageY = (imageY + dy).coerceIn(.08f, .85f) },
-                        onImageSize = { recordEdit(); imageSize = it }, onPickImage = { imagePicker.launch(arrayOf("image/*")) }, onRemoveImage = { recordEdit(); imageUri = null },
+                        shapes = shapes, selectedShape = selectedShape,
+                         onAddShape = { type -> recordEdit(); shapes = shapes + ShapeLayer(type, .5f, .5f, .12f, 1); selectedShape = shapes.size },
+                         onMoveShape = { i, dx, dy -> selectedShape = i; shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(x = (it[i].x + dx).coerceIn(.015f, .985f), y = (it[i].y + dy).coerceIn(.015f, .985f)) } },
+                         onShapeSize = { i, size -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(size = size) } },
+                         onShapeColor = { i, color -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it[i] = it[i].copy(color = color) } },
+                         onRemoveShape = { i -> recordEdit(); shapes = shapes.toMutableList().also { if (i in it.indices) it.removeAt(i) }; selectedShape = -1 },
                         selectedElement = selectedElement, onSelectElement = { selectedElement = it },
-                        onMoveElement = { i, dx, dy -> elementXs = elementXs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dx).coerceIn(.08f, .92f) }; elementYs = elementYs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dy).coerceIn(.08f, .9f) } },
+                        onMoveElement = { i, dx, dy -> elementXs = elementXs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dx).coerceIn(.015f, .985f) }; elementYs = elementYs.toMutableList().also { while (it.size <= i) it.add(.5f); it[i] = (it[i] + dy).coerceIn(.015f, .985f) } },
                         onSizeElement = { i, size -> recordEdit(); elementSizes = elementSizes.toMutableList().also { while (it.size <= i) it.add(13f); it[i] = size } },
                         onColorElement = { i, color -> recordEdit(); elementColors = elementColors.toMutableList().also { while (it.size <= i) it.add(0); it[i] = color } },
                         onLayerElement = { i, delta -> recordEdit(); val order = (elementOrder.filter { it < 2 + extraTexts.size } + (0 until (2 + extraTexts.size)).filterNot { it in elementOrder }).toMutableList(); val at = order.indexOf(i); val to = (at + delta).coerceIn(0, order.lastIndex); if (at >= 0) { val tmp = order[at]; order[at] = order[to]; order[to] = tmp; elementOrder = order } },
@@ -150,17 +148,17 @@ private fun HomiDesignApp() {
                         onBack = { editorOpen = false },
                         onSave = {
                             val id = editingId ?: System.currentTimeMillis()
-                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize)
+                            val item = DesignItem(id, titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)
                             DesignRepository.save(context, item)
                             savedDesigns.removeAll { it.id == id }; savedDesigns.add(0, item); editingId = id
                             Toast.makeText(context, "تم حفظ التصميم على الجهاز", Toast.LENGTH_SHORT).show()
                         },
                         onExportPng = {
-                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ الصورة: " + DesignExporter.exportPng(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير الصورة: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         },
                         onExportPdf = {
-                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = imageUri, imageX = imageX, imageY = imageY, imageSize = imageSize)), Toast.LENGTH_LONG).show() }
+                            try { Toast.makeText(context, "تم حفظ PDF: " + DesignExporter.exportPdf(context, DesignItem(editingId ?: System.currentTimeMillis(), titleText, subtitleText, selectedColor, extraTexts = extraTexts, elementXs = elementXs, elementYs = elementYs, elementSizes = elementSizes, elementColors = elementColors, elementOrder = elementOrder, imageUri = null, imageX = imageX, imageY = imageY, imageSize = imageSize, shapes = shapes)), Toast.LENGTH_LONG).show() }
                             catch (e: Exception) { Toast.makeText(context, "تعذر تصدير PDF: " + (e.message ?: ""), Toast.LENGTH_LONG).show() }
                         }
                     )
@@ -168,17 +166,17 @@ private fun HomiDesignApp() {
                     when (selectedTab) {
                         0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
                             onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
-                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts; imageUri = draft.imageUri; imageX = draft.imageX; imageY = draft.imageY; imageSize = draft.imageSize
+                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts; imageUri = draft.imageUri; imageX = draft.imageX; imageY = draft.imageY; imageSize = draft.imageSize; shapes = draft.shapes
                                 selectedColor = draft.colorIndex.coerceIn(0, 3); elementXs = draft.elementXs.ifEmpty { elementXs }; elementYs = draft.elementYs.ifEmpty { elementYs }; elementSizes = draft.elementSizes.ifEmpty { elementSizes }; elementColors = draft.elementColors.ifEmpty { elementColors }; elementOrder = draft.elementOrder.ifEmpty { elementOrder }; editingId = null; editorOpen = true
                                 undoStack.clear(); redoStack.clear()
                             } },
-                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); imageUri = null; imageX = .5f; imageY = .17f; imageSize = .19f; selectedElement = 0; undoStack.clear(); redoStack.clear() },
-                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); imageUri = null; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); selectedElement = 0; editorOpen = true })
+                            onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); imageUri = null; imageX = .5f; imageY = .17f; imageSize = .19f; shapes = emptyList(); selectedShape = -1; selectedElement = 0; undoStack.clear(); redoStack.clear() },
+                            onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); imageUri = null; shapes = emptyList(); selectedShape = -1; elementXs = listOf(.5f,.5f,.5f,.5f,.5f,.5f); elementYs = listOf(.392f,.533f,.615f,.668f,.721f,.774f); elementSizes = listOf(28f,15f,13f,13f,13f,13f); elementColors = listOf(0,0,0,0,0,0); elementOrder = listOf(0,1,2,3,4,5); selectedElement = 0; editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; selectedElement = 0; editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = null; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         2 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
-                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; selectedElement = 0; editingId = item.id; editorOpen = true },
+                            onOpen = { item -> titleText = item.title; subtitleText = item.subtitle; extraTexts = item.extraTexts; selectedColor = item.colorIndex.coerceIn(0, 3); elementXs = item.elementXs.ifEmpty { elementXs }; elementYs = item.elementYs.ifEmpty { elementYs }; elementSizes = item.elementSizes.ifEmpty { elementSizes }; elementColors = item.elementColors.ifEmpty { elementColors }; elementOrder = item.elementOrder.ifEmpty { elementOrder }; imageUri = item.imageUri; imageX = item.imageX; imageY = item.imageY; imageSize = item.imageSize; shapes = item.shapes; selectedElement = 0; editingId = item.id; editorOpen = true },
                             onDelete = { item -> DesignRepository.delete(context, item.id); savedDesigns.removeAll { it.id == item.id } })
                         else -> SimpleState(Modifier.weight(1f), "الإعدادات", "قريبًا: اللغة، الجودة، ومظهر التطبيق.", Icons.Default.Settings)
                     }
@@ -312,8 +310,8 @@ private fun EditorScreen(
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
     extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
     elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>,
-    imageUri: String?, imageX: Float, imageY: Float, imageSize: Float,
-    onMoveImage: (Float, Float) -> Unit, onImageSize: (Float) -> Unit, onPickImage: () -> Unit, onRemoveImage: () -> Unit,
+    shapes: List<ShapeLayer>, selectedShape: Int, onAddShape: (String) -> Unit, onMoveShape: (Int, Float, Float) -> Unit,
+    onShapeSize: (Int, Float) -> Unit, onShapeColor: (Int, Int) -> Unit, onRemoveShape: (Int) -> Unit,
     selectedElement: Int, onSelectElement: (Int) -> Unit, onMoveElement: (Int, Float, Float) -> Unit,
     onSizeElement: (Int, Float) -> Unit, onColorElement: (Int, Int) -> Unit, onLayerElement: (Int, Int) -> Unit,
     canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
@@ -329,7 +327,7 @@ private fun EditorScreen(
         }
         val context = LocalContext.current
     val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
-    val photoBitmap = remember(imageUri) { imageUri?.let { raw -> runCatching { context.contentResolver.openInputStream(android.net.Uri.parse(raw))?.use { android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() } }
+
         val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
         val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
         val visibleOrder = (elementOrder + canvasTexts.indices.filterNot { it in elementOrder }).filter { it in canvasTexts.indices }
@@ -338,15 +336,25 @@ private fun EditorScreen(
             .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp))) {
             val canvasWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
             val canvasHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-            Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .45f), modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(24.dp))
-            val photoSize = (maxWidth * imageSize).coerceIn(48.dp, 150.dp)
-            photoBitmap?.let { photo -> Image(bitmap = photo, contentDescription = "صورة التصميم", contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.offset { IntOffset((imageX * canvasWidth - photoSize.toPx() / 2f).roundToInt(), (imageY * canvasHeight - photoSize.toPx() / 2f).roundToInt()) }.size(photoSize).clip(CircleShape).border(2.dp, Color.White.copy(alpha = .8f), CircleShape).pointerInput(imageX, imageY, photoSize) { detectDragGestures { change, dragAmount -> change.consume(); onMoveImage(dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } }) }
+            Row(Modifier.align(Alignment.TopCenter).padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                repeat(3) { Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .72f), modifier = Modifier.size(18.dp)) }
+            }
+            shapes.forEachIndexed { shapeIndex, shape ->
+                val shapeDp = (maxWidth * shape.size).coerceIn(18.dp, 120.dp)
+                val shapeColor = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))[shape.color.coerceIn(0, 3)]
+                Box(Modifier.offset { IntOffset((shape.x * canvasWidth - shapeDp.roundToPx() / 2f).roundToInt(), (shape.y * canvasHeight - shapeDp.roundToPx() / 2f).roundToInt()) }
+                    .size(if (shape.type == "line") shapeDp * 1.6f else shapeDp, if (shape.type == "line") 3.dp else shapeDp)
+                    .then(if (shape.type == "circle") Modifier.clip(CircleShape) else Modifier.clip(RoundedCornerShape(5.dp)))
+                    .background(if (shape.type == "line") shapeColor else shapeColor.copy(alpha = .18f))
+                    .border(if (selectedShape == shapeIndex) 2.dp else 1.dp, if (selectedShape == shapeIndex) Cyan else shapeColor, if (shape.type == "circle") CircleShape else RoundedCornerShape(5.dp))
+                    .pointerInput(shapeIndex) { detectDragGestures(onDragStart = { onMoveShape(shapeIndex, 0f, 0f) }) { change, dragAmount -> change.consume(); onMoveShape(shapeIndex, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight) } })
+            }
             visibleOrder.forEach { index ->
                 val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
                 val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
-                Text(value, modifier = Modifier.fillMaxWidth(.8f)
-                    .offset { IntOffset(((elementXs.getOrElse(index) { .5f } * canvasWidth) - canvasWidth * .4f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] } * canvasHeight).roundToInt()) }
-                    .pointerInput(index, elementXs, elementYs) {
+                Text(value, modifier = Modifier.fillMaxWidth(.96f)
+                     .offset { IntOffset(((elementXs.getOrElse(index) { .5f }.coerceIn(.01f, .99f) * canvasWidth) - canvasWidth * .48f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] }.coerceIn(.02f, .98f) * canvasHeight - 36f).roundToInt()) }
+                    .pointerInput(index) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
                             onSelectElement(index)
@@ -393,23 +401,34 @@ private fun EditorScreen(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Text("الصورة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        Spacer(Modifier.height(16.dp))
+        Text("الأشكال", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         GlassCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text(if (imageUri == null) "أضف صورة من معرض الهاتف" else "تمت إضافة صورة إلى التصميم", color = Muted, fontSize = 12.sp)
-                Spacer(Modifier.height(8.dp))
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onPickImage, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Purple)) { Icon(Icons.Default.AddPhotoAlternate, null); Spacer(Modifier.width(6.dp)); Text("اختيار صورة") }
-                    if (imageUri != null) OutlinedButton(onClick = onRemoveImage) { Icon(Icons.Default.DeleteOutline, null); Text("إزالة") }
+                    listOf("circle" to "دائرة", "rect" to "مستطيل", "line" to "خط").forEach { (type, label) ->
+                        OutlinedButton(onClick = { onAddShape(type) }, modifier = Modifier.weight(1f)) { Text(label, fontSize = 12.sp) }
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("حجم الصورة", color = Muted, fontSize = 12.sp)
-                    Slider(value = imageSize, onValueChange = { onImageSize(it) }, valueRange = .08f.. .38f, modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Purple))
+                if (shapes.isNotEmpty()) {
+                    Text("حرّك الشكل داخل اللوحة لتحديده؛ يمكن تغيير حجمه ولونه أو حذفه.", color = Muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("حجم", color = Muted, fontSize = 12.sp)
+                        Slider(value = shapes.getOrNull(selectedShape.coerceAtLeast(0))?.size ?: .12f,
+                            onValueChange = { if (selectedShape in shapes.indices) onShapeSize(selectedShape, it) },
+                            valueRange = .04f.. .32f, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { if (selectedShape in shapes.indices) onRemoveShape(selectedShape) }) { Icon(Icons.Default.DeleteOutline, "حذف الشكل", tint = Color(0xFFFF8FAB)) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { idx, col ->
+                            Box(Modifier.size(28.dp).clip(CircleShape).background(col).clickable { if (selectedShape in shapes.indices) onShapeColor(selectedShape, idx) })
+                        }
+                    }
                 }
-                Text("اسحب الصورة داخل المعاينة لتغيير موضعها. الحجم والموضع محفوظان في التصميم والتصدير.", color = Muted, fontSize = 11.sp)
+                Text("اسحب الأشكال والنصوص بحرية داخل إطار التصميم.", color = Muted, fontSize = 11.sp)
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Text("محتوى التصميم", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         Spacer(Modifier.height(10.dp))
         GlassCard(Modifier.fillMaxWidth()) {
