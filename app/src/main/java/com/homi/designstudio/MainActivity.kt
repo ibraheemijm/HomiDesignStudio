@@ -72,6 +72,13 @@ private fun HomiDesignApp() {
     var editingId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
+    var hasDraft by remember { mutableStateOf(DesignRepository.draft(context) != null) }
+    LaunchedEffect(editorOpen, titleText, subtitleText, selectedColor, extraTexts, editingId) {
+        if (editorOpen) {
+            DesignRepository.saveDraft(context, DesignItem(editingId ?: -1L, titleText, subtitleText, selectedColor, extraTexts = extraTexts))
+            hasDraft = true
+        }
+    }
     val accents = listOf(Color(0xFF7657FF), Color(0xFF087E8B), Color(0xFFB54772), Color(0xFFCA8A04))
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -124,7 +131,12 @@ private fun HomiDesignApp() {
                     )
                 } else {
                     when (selectedTab) {
-                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor,
+                        0 -> HomeScreen(Modifier.weight(1f), selectedCategory, { selectedCategory = it }, templateQuery, { templateQuery = it }, accents, selectedColor, hasDraft,
+                            onRestoreDraft = { DesignRepository.draft(context)?.let { draft ->
+                                titleText = draft.title; subtitleText = draft.subtitle; extraTexts = draft.extraTexts
+                                selectedColor = draft.colorIndex.coerceIn(0, 3); editingId = null; editorOpen = true
+                                undoStack.clear(); redoStack.clear()
+                            } },
                             onNew = { editingId = null; editorOpen = true; titleText = "اصنع شيئًا مميزًا"; subtitleText = "فكرتك تستحق أن تُرى"; extraTexts = emptyList(); selectedColor = 0 },
                             onTemplate = { text -> editingId = null; titleText = text; extraTexts = emptyList(); editorOpen = true })
                         1 -> SavedDesignsScreen(Modifier.weight(1f), savedDesigns,
@@ -159,7 +171,7 @@ private fun HomiDesignApp() {
 private fun HomeScreen(
     modifier: Modifier = Modifier, selectedCategory: String, onCategory: (String) -> Unit,
     templateQuery: String, onTemplateQuery: (String) -> Unit, accents: List<Color>, selectedColor: Int,
-    onNew: () -> Unit, onTemplate: (String) -> Unit
+    hasDraft: Boolean, onRestoreDraft: () -> Unit, onNew: () -> Unit, onTemplate: (String) -> Unit
 ) {
     val categories = listOf("الكل", "حالات", "اقتباسات", "تهاني", "أعمال")
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
@@ -178,6 +190,13 @@ private fun HomeScreen(
                     Icon(Icons.Default.Add, null)
                     Spacer(Modifier.width(8.dp))
                     Text("إنشاء تصميم جديد", fontWeight = FontWeight.Bold)
+                }
+                if (hasDraft) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onRestoreDraft, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp)) {
+                        Icon(Icons.Default.Restore, null, tint = Cyan); Spacer(Modifier.width(8.dp))
+                        Text("استعادة آخر مسودة", color = Cyan)
+                    }
                 }
             }
         }
