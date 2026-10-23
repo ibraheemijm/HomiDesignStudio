@@ -293,6 +293,9 @@ private fun EditorScreen(
     modifier: Modifier = Modifier, title: String, onTitle: (String) -> Unit, subtitle: String, onSubtitle: (String) -> Unit,
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
     extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
+    elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>,
+    selectedElement: Int, onSelectElement: (Int) -> Unit, onMoveElement: (Int, Float, Float) -> Unit,
+    onSizeElement: (Int, Float) -> Unit, onColorElement: (Int, Int) -> Unit, onLayerElement: (Int, Int) -> Unit,
     canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
     onSave: () -> Unit, onExportPng: () -> Unit, onExportPdf: () -> Unit
 ) {
@@ -303,22 +306,65 @@ private fun EditorScreen(
             IconButton(onClick = onUndo, enabled = canUndo) { Icon(Icons.Default.Undo, "تراجع", tint = if (canUndo) Cyan else Muted) }
             IconButton(onClick = onRedo, enabled = canRedo) { Icon(Icons.Default.Redo, "إعادة", tint = if (canRedo) Cyan else Muted) }
         }
-        Box(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
+        val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
+        val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
+        val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
+        val visibleOrder = (elementOrder + canvasTexts.indices.filterNot { it in elementOrder }).filter { it in canvasTexts.indices }
+        BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(.82f).clip(RoundedCornerShape(26.dp))
             .background(Brush.linearGradient(listOf(accents[selectedColor], Color(0xFF121729), Color(0xFF080B14))))
-            .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp)).padding(24.dp),
-            contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(30.dp))
-                Spacer(Modifier.height(22.dp))
-                Text(title.ifBlank { "عنوان تصميمك" }, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                Spacer(Modifier.height(12.dp))
-                Text(subtitle.ifBlank { "أضف عبارة تلهم الآخرين" }, color = Color.White.copy(alpha = .85f), fontSize = 15.sp, textAlign = TextAlign.Center)
-                extraTexts.take(4).forEachIndexed { index, text ->
-                    Spacer(Modifier.height(10.dp))
-                    Text(text.ifBlank { "عنصر نصي ${index + 1}" }, color = Color.White.copy(alpha = .92f), fontSize = 13.sp, textAlign = TextAlign.Center)
+            .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(26.dp))) {
+            val canvasWidth = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+            val canvasHeight = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+            Icon(Icons.Default.AutoAwesome, null, tint = Color.White.copy(alpha = .45f), modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(24.dp))
+            visibleOrder.forEach { index ->
+                val value = canvasTexts[index].ifBlank { if (index == 0) "عنوان تصميمك" else if (index == 1) "أضف عبارة تلهم الآخرين" else "عنصر نصي ${index - 1}" }
+                val palette = listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB))
+                Text(value, modifier = Modifier.fillMaxWidth(.8f)
+                    .offset { IntOffset(((elementXs.getOrElse(index) { .5f } * canvasWidth) - canvasWidth * .4f).roundToInt(), (elementYs.getOrElse(index) { defaultYs[index.coerceAtMost(5)] } * canvasHeight).roundToInt()) }
+                    .pointerInput(index, elementXs, elementYs) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            onSelectElement(index)
+                            onMoveElement(index, dragAmount.x / canvasWidth, dragAmount.y / canvasHeight)
+                        }
+                    }
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selectedElement == index) Color.White.copy(alpha = .10f) else Color.Transparent)
+                    .border(if (selectedElement == index) 1.dp else 0.dp, if (selectedElement == index) Cyan.copy(alpha = .8f) else Color.Transparent, RoundedCornerShape(8.dp))
+                    .clickable { onSelectElement(index) }.padding(horizontal = 4.dp, vertical = 3.dp),
+                    color = palette[elementColors.getOrElse(index) { 0 }.coerceIn(0, palette.lastIndex)],
+                    fontSize = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] }).sp,
+                    fontWeight = if (index == 0) FontWeight.ExtraBold else FontWeight.Medium,
+                    textAlign = TextAlign.Center, lineHeight = (elementSizes.getOrElse(index) { defaultSizes[index.coerceAtMost(5)] } * 1.2f).sp
+                )
+            }
+            Text("HOMI DESIGN", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+                color = Color.White.copy(alpha = .45f), fontSize = 9.sp, letterSpacing = 3.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Text("أدوات العنصر المحدد", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(when (selectedElement) { 0 -> "العنوان"; 1 -> "النص الفرعي"; else -> "النص الإضافي ${selectedElement - 1}" }, color = Cyan, fontSize = 12.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("الحجم", color = Muted, fontSize = 12.sp)
+                    Slider(value = elementSizes.getOrElse(selectedElement) { defaultSizes[selectedElement.coerceAtMost(5)] },
+                        onValueChange = { onSizeElement(selectedElement, it) }, valueRange = 10f..48f,
+                        modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Purple))
                 }
-                Spacer(Modifier.height(26.dp))
-                Text("HOMI DESIGN", color = Color.White.copy(alpha = .65f), fontSize = 10.sp, letterSpacing = 3.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("اللون", color = Muted, fontSize = 12.sp)
+                    listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { index, color ->
+                        Box(Modifier.size(30.dp).clip(CircleShape).background(color)
+                            .border(if (elementColors.getOrElse(selectedElement) { 0 } == index) 3.dp else 0.dp, Purple, CircleShape)
+                            .clickable { onColorElement(selectedElement, index) })
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { onLayerElement(selectedElement, -1) }) { Icon(Icons.Default.ArrowDownward, "إلى الخلف", tint = Cyan) }
+                    IconButton(onClick = { onLayerElement(selectedElement, 1) }) { Icon(Icons.Default.ArrowUpward, "إلى الأمام", tint = Cyan) }
+                }
+                Text("اسحب النص داخل اللوحة لتحريك موضعه. اختر النص أولًا لتعديل حجمه ولونه وترتيبه.", color = Muted, fontSize = 11.sp)
             }
         }
         Spacer(Modifier.height(18.dp))
