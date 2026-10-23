@@ -44,7 +44,7 @@ private val Cyan = Color(0xFF53E0D0)
 private val Muted = Color(0xFF9AA5BC)
 
 private data class DesignTemplate(val title: String, val subtitle: String, val color: Color, val category: String)
-private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float)
+private data class EditorSnapshot(val title: String, val subtitle: String, val colorIndex: Int, val extraTexts: List<String>, val xs: List<Float>, val ys: List<Float>, val sizes: List<Float>, val colors: List<Int>, val order: List<Int>, val imageUri: String?, val imageX: Float, val imageY: Float, val imageSize: Float, val shapes: List<ShapeLayer>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,9 +72,11 @@ private fun HomiDesignApp() {
     var elementColors by remember { mutableStateOf(listOf(0, 0, 0, 0, 0, 0)) }
     var elementOrder by remember { mutableStateOf(listOf(0, 1, 2, 3, 4, 5)) }
     var selectedElement by remember { mutableIntStateOf(0) }
+    var shapes by remember { mutableStateOf(listOf<ShapeLayer>()) }
+    var selectedShape by remember { mutableIntStateOf(-1) }
     val undoStack = remember { mutableStateListOf<EditorSnapshot>() }
     val redoStack = remember { mutableStateListOf<EditorSnapshot>() }
-    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, imageUri, imageX, imageY, imageSize) }
+    val currentSnapshot = { EditorSnapshot(titleText, subtitleText, selectedColor, extraTexts, elementXs, elementYs, elementSizes, elementColors, elementOrder, null, imageX, imageY, imageSize, shapes) }
     val recordEdit = {
         undoStack.add(currentSnapshot())
         if (undoStack.size > 50) undoStack.removeAt(0)
@@ -85,16 +87,9 @@ private fun HomiDesignApp() {
         subtitleText = snapshot.subtitle
         selectedColor = snapshot.colorIndex
         extraTexts = snapshot.extraTexts
-        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize
+        elementXs = snapshot.xs; elementYs = snapshot.ys; elementSizes = snapshot.sizes; elementColors = snapshot.colors; elementOrder = snapshot.order; imageUri = snapshot.imageUri; imageX = snapshot.imageX; imageY = snapshot.imageY; imageSize = snapshot.imageSize; shapes = snapshot.shapes
     }
     val context = LocalContext.current
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            recordEdit()
-            try { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
-            imageUri = uri.toString()
-        }
-    }
     var editorOpen by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<Long?>(null) }
     val savedDesigns = remember { mutableStateListOf<DesignItem>().apply { addAll(DesignRepository.all(context)) } }
@@ -312,8 +307,8 @@ private fun EditorScreen(
     accents: List<Color>, selectedColor: Int, onColor: (Int) -> Unit,
     extraTexts: List<String>, onExtraTexts: (List<String>) -> Unit,
     elementXs: List<Float>, elementYs: List<Float>, elementSizes: List<Float>, elementColors: List<Int>, elementOrder: List<Int>,
-    imageUri: String?, imageX: Float, imageY: Float, imageSize: Float,
-    onMoveImage: (Float, Float) -> Unit, onImageSize: (Float) -> Unit, onPickImage: () -> Unit, onRemoveImage: () -> Unit,
+    shapes: List<ShapeLayer>, selectedShape: Int, onAddShape: (String) -> Unit, onMoveShape: (Int, Float, Float) -> Unit,
+    onShapeSize: (Int, Float) -> Unit, onShapeColor: (Int, Int) -> Unit, onRemoveShape: (Int) -> Unit,
     selectedElement: Int, onSelectElement: (Int) -> Unit, onMoveElement: (Int, Float, Float) -> Unit,
     onSizeElement: (Int, Float) -> Unit, onColorElement: (Int, Int) -> Unit, onLayerElement: (Int, Int) -> Unit,
     canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, onBack: () -> Unit,
@@ -329,7 +324,7 @@ private fun EditorScreen(
         }
         val context = LocalContext.current
     val canvasTexts = listOf(title, subtitle) + extraTexts.take(4)
-    val photoBitmap = remember(imageUri) { imageUri?.let { raw -> runCatching { context.contentResolver.openInputStream(android.net.Uri.parse(raw))?.use { android.graphics.BitmapFactory.decodeStream(it)?.asImageBitmap() } }.getOrNull() } }
+
         val defaultSizes = listOf(28f, 15f, 13f, 13f, 13f, 13f)
         val defaultYs = listOf(.392f, .533f, .615f, .668f, .721f, .774f)
         val visibleOrder = (elementOrder + canvasTexts.indices.filterNot { it in elementOrder }).filter { it in canvasTexts.indices }
@@ -393,23 +388,34 @@ private fun EditorScreen(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Text("الصورة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        Spacer(Modifier.height(16.dp))
+        Text("الأشكال", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         GlassCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text(if (imageUri == null) "أضف صورة من معرض الهاتف" else "تمت إضافة صورة إلى التصميم", color = Muted, fontSize = 12.sp)
-                Spacer(Modifier.height(8.dp))
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onPickImage, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Purple)) { Icon(Icons.Default.AddPhotoAlternate, null); Spacer(Modifier.width(6.dp)); Text("اختيار صورة") }
-                    if (imageUri != null) OutlinedButton(onClick = onRemoveImage) { Icon(Icons.Default.DeleteOutline, null); Text("إزالة") }
+                    listOf("circle" to "دائرة", "rect" to "مستطيل", "line" to "خط").forEach { (type, label) ->
+                        OutlinedButton(onClick = { onAddShape(type) }, modifier = Modifier.weight(1f)) { Text(label, fontSize = 12.sp) }
+                    }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("حجم الصورة", color = Muted, fontSize = 12.sp)
-                    Slider(value = imageSize, onValueChange = { onImageSize(it) }, valueRange = .08f.. .38f, modifier = Modifier.weight(1f), colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Purple))
+                if (shapes.isNotEmpty()) {
+                    Text("حرّك الشكل داخل اللوحة لتحديده؛ يمكن تغيير حجمه ولونه أو حذفه.", color = Muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("حجم", color = Muted, fontSize = 12.sp)
+                        Slider(value = shapes.getOrNull(selectedShape.coerceAtLeast(0))?.size ?: .12f,
+                            onValueChange = { if (selectedShape in shapes.indices) onShapeSize(selectedShape, it) },
+                            valueRange = .04f.. .32f, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { if (selectedShape in shapes.indices) onRemoveShape(selectedShape) }) { Icon(Icons.Default.DeleteOutline, "حذف الشكل", tint = Color(0xFFFF8FAB)) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf(Color.White, Cyan, Color(0xFFFFD166), Color(0xFFFF8FAB)).forEachIndexed { idx, col ->
+                            Box(Modifier.size(28.dp).clip(CircleShape).background(col).clickable { if (selectedShape in shapes.indices) onShapeColor(selectedShape, idx) })
+                        }
+                    }
                 }
-                Text("اسحب الصورة داخل المعاينة لتغيير موضعها. الحجم والموضع محفوظان في التصميم والتصدير.", color = Muted, fontSize = 11.sp)
+                Text("اسحب الأشكال والنصوص بحرية داخل إطار التصميم.", color = Muted, fontSize = 11.sp)
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         Text("محتوى التصميم", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         Spacer(Modifier.height(10.dp))
         GlassCard(Modifier.fillMaxWidth()) {
