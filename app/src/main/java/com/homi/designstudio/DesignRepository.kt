@@ -115,7 +115,7 @@ object DesignExporter {
         p.textAlign = Paint.Align.CENTER
         p.typeface = Typeface.create("sans-serif", Typeface.BOLD)
         p.textSize = 54f
-        c.drawText("✦   ✦   ✦", 540f, 135f, p)
+        c.drawText("✦", 540f, 135f, p)
         item.shapes.forEach { shape ->
             val cx = shape.x.coerceIn(.02f, .98f) * w
             val cy = shape.y.coerceIn(.02f, .98f) * h
